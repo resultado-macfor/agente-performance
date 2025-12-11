@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import json
+import os
 from google.oauth2 import service_account
 from google.cloud import bigquery
 import plotly.express as px
@@ -74,29 +75,69 @@ st.markdown("""
 st.title("📊 Analytics Platform - TODAS as Colunas")
 
 # =============================================================================
-# CONEXÃO E CARREGAMENTO - TODAS AS COLUNAS (COM STREAMLIT SECRETS)
+# CONEXÃO E CARREGAMENTO - TODAS AS COLUNAS (COM VARIÁVEIS DE AMBIENTE)
 # =============================================================================
 
 @st.cache_resource
 def get_bigquery_client():
-    """Cria cliente BigQuery usando credenciais do Streamlit Secrets"""
+    """Cria cliente BigQuery usando variáveis de ambiente"""
     try:
-        # Verifica se os secrets estão configurados
-        if "gcp_service_account" not in st.secrets:
-            st.error("❌ Credenciais do Google Cloud não encontradas no Streamlit Secrets")
+        # OPÇÃO 1: Variáveis de ambiente individuais
+        if all(key in os.environ for key in ['type', 'project_id', 'private_key', 'client_email', 'token_uri']):
+            service_account_info = {
+                "type": os.environ['type'],
+                "project_id": os.environ['project_id'],
+                "private_key_id": os.environ.get('private_key_id', ''),
+                "private_key": os.environ['private_key'].replace('\\n', '\n'),
+                "client_email": os.environ['client_email'],
+                "client_id": os.environ.get('client_id', ''),
+                "auth_uri": os.environ.get('auth_uri', 'https://accounts.google.com/o/oauth2/auth'),
+                "token_uri": os.environ['token_uri'],
+                "auth_provider_x509_cert_url": os.environ.get('auth_provider_x509_cert_url', 'https://www.googleapis.com/oauth2/v1/certs'),
+                "client_x509_cert_url": os.environ.get('client_x509_cert_url', ''),
+                "universe_domain": os.environ.get('universe_domain', 'googleapis.com')
+            }
+        
+        # OPÇÃO 2: JSON string completo em variável de ambiente
+        elif 'GOOGLE_APPLICATION_CREDENTIALS_JSON' in os.environ:
+            credentials_json = os.environ['GOOGLE_APPLICATION_CREDENTIALS_JSON']
+            service_account_info = json.loads(credentials_json)
+        
+        # OPÇÃO 3: Streamlit Secrets
+        elif 'gcp_service_account' in st.secrets:
+            service_account_info = dict(st.secrets["gcp_service_account"])
+            if isinstance(service_account_info.get("private_key"), str):
+                service_account_info["private_key"] = service_account_info["private_key"].replace("\\n", "\n")
+        
+        else:
+            st.error("""
+            ❌ Credenciais não encontradas!
             
+            Configure uma das seguintes opções:
+            
+            1. **Variáveis de ambiente individuais**:
+               - `type`
+               - `project_id`
+               - `private_key`
+               - `client_email`
+               - `token_uri`
+            
+            2. **JSON completo em variável de ambiente**:
+               - `GOOGLE_APPLICATION_CREDENTIALS_JSON`
+            
+            3. **Streamlit Secrets** (no formato TOML):
+               ```toml
+               [gcp_service_account]
+               type = "service_account"
+               project_id = "seu-project"
+               private_key = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+               client_email = "email@project.iam.gserviceaccount.com"
+               token_uri = "https://oauth2.googleapis.com/token"
+               ```
+            """)
             return None
         
-        # Carrega as credenciais do Streamlit Secrets
-        service_account_info = dict(st.secrets["gcp_service_account"])
-        
-        # Ajusta a chave privada se necessário
-        if isinstance(service_account_info.get("private_key"), str):
-            # Garante que a chave tenha quebras de linha corretas
-            private_key = service_account_info["private_key"]
-            if "\\n" in private_key:
-                service_account_info["private_key"] = private_key.replace("\\n", "\n")
-        
+        # Criar credenciais
         credentials = service_account.Credentials.from_service_account_info(
             service_account_info,
             scopes=["https://www.googleapis.com/auth/cloud-platform"]
@@ -107,12 +148,8 @@ def get_bigquery_client():
             project=service_account_info["project_id"]
         )
         
-        st.success("✅ Conectado ao BigQuery usando credenciais do Streamlit Secrets")
         return client
     
-    except KeyError as e:
-        st.error(f"❌ Chave não encontrada no secrets: {e}")
-        return None
     except Exception as e:
         st.error(f"❌ Erro na conexão com BigQuery: {str(e)}")
         return None
@@ -216,7 +253,7 @@ def load_all_columns_data(_client, data_inicio=None, data_fim=None, data_sources
         return pd.DataFrame()
 
 # =============================================================================
-# FUNÇÕES DE ANÁLISE
+# RESTANTE DO CÓDIGO (MANTIDO IGUAL)
 # =============================================================================
 
 def identificar_colunas_numericas(df):
@@ -228,7 +265,6 @@ def identificar_colunas_numericas(df):
             # Tenta converter para numérico
             if pd.api.types.is_numeric_dtype(df[col]):
                 colunas_numericas.append(col)
-            # Ou se tem pelo menos 50% de valores numéricos
             elif df[col].dropna().apply(lambda x: isinstance(x, (int, float, np.number))).any():
                 colunas_numericas.append(col)
         except:
@@ -348,13 +384,43 @@ if 'colunas_numericas' not in st.session_state:
 with st.sidebar:
     st.header("⚙️ Configurações")
     
-    # Verificação de conexão
+    # Verificação de variáveis de ambiente
+    st.subheader("🔧 Configuração de Credenciais")
+    
+    # Botão para verificar configuração
+    if st.button("🔍 Verificar Configuração Atual"):
+        with st.expander("Configurações Detectadas"):
+            # Verificar métodos disponíveis
+            metodos = []
+            if all(key in os.environ for key in ['type', 'project_id', 'private_key', 'client_email']):
+                metodos.append("✅ Variáveis de ambiente individuais")
+            if 'GOOGLE_APPLICATION_CREDENTIALS_JSON' in os.environ:
+                metodos.append("✅ JSON em variável de ambiente")
+            if 'gcp_service_account' in st.secrets:
+                metodos.append("✅ Streamlit Secrets")
+            
+            if metodos:
+                st.write("**Métodos disponíveis:**")
+                for metodo in metodos:
+                    st.write(f"- {metodo}")
+                
+                # Mostrar algumas informações (sem expor credenciais sensíveis)
+                if 'project_id' in os.environ:
+                    st.write(f"**Project ID:** {os.environ['project_id']}")
+                if 'client_email' in os.environ:
+                    st.write(f"**Client Email:** {os.environ['client_email']}")
+            else:
+                st.error("❌ Nenhum método de autenticação configurado")
+    
+    # Testar conexão
     st.subheader("🔗 Conexão")
     if st.button("Testar Conexão BigQuery"):
         with st.spinner("Conectando..."):
             client = get_bigquery_client()
             if client:
                 st.success("✅ Conexão bem-sucedida!")
+            else:
+                st.error("❌ Falha na conexão. Verifique as credenciais.")
     
     # Data sources
     data_sources_opcoes = ["facebook", "google ads", "tiktok"]
@@ -414,11 +480,16 @@ with st.sidebar:
                     st.success(f"📊 {len(st.session_state.colunas_numericas)} colunas numéricas identificadas")
                 else:
                     st.error("Nenhum dado encontrado")
+            else:
+                st.error("❌ Não foi possível conectar ao BigQuery. Configure as credenciais.")
 
-
-
+# Verificar se há dados carregados
 df = st.session_state.df_completo
 colunas_numericas = st.session_state.colunas_numericas
+
+if df.empty:
+    st.warning("📭 Nenhum dado carregado. Use o botão 'Carregar TODOS os Dados' na sidebar para começar.")
+    st.stop()
 
 # Abas principais
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -489,7 +560,7 @@ with tab1:
             colunas_para_mostrar.append(col)
     
     # Mostrar informações de cada coluna
-    for col in sorted(colunas_para_mostrar)[:50]:  # Limitar a 50 para performance
+    for col in sorted(colunas_para_mostrar)[:50]:
         analise = analisar_coluna(df, col)
         
         with st.expander(f"**{col}** ({analise['tipo_detalhado'] if 'tipo_detalhado' in analise else analise['tipo']})"):
