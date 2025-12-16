@@ -147,7 +147,7 @@ if not gemini_api_key and hasattr(st, 'secrets'):
 if gemini_api_key and GEMINI_AVAILABLE:
     try:
         genai.configure(api_key=gemini_api_key)
-        modelo_texto = genai.GenerativeModel("gemini-1.5-flash")
+        modelo_texto = genai.GenerativeModel("gemini-2.0-flash")
         st.sidebar.success("✅ Gemini configurado com sucesso!")
     except Exception as e:
         st.sidebar.warning(f"⚠️ Erro ao configurar Gemini: {str(e)[:50]}...")
