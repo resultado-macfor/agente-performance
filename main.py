@@ -1260,52 +1260,45 @@ with tab3:
         if coluna_selecionada:
             analise = analisar_coluna(df, coluna_selecionada)
             
-            col_info1, col_info2 = st.columns(2)
-            
-            with col_info1:
-                st.metric("Total de Valores", analise['total'], key="total_valores_tab3")
-                st.metric("Valores Não Nulos", f"{analise['nao_nulos']:,}", key="nao_nulos_tab3")
-                st.metric("Valores Únicos", f"{analise['valores_unicos']:,}", key="valores_unicos_tab3")
-            
-            with col_info2:
-                st.metric("Valores Nulos", f"{analise['nulos']:,}", key="nulos_tab3")
-                st.metric("% Nulos", f"{analise['percentual_nulos']:.1f}%", key="percentual_nulos_tab3")
-            
-            # Visualização
-            st.subheader("📊 Visualização")
-            fig = criar_visualizacao_coluna(df, coluna_selecionada)
-            if fig:
-                st.plotly_chart(fig, use_container_width=True, key=f"viz_{coluna_selecionada}_tab3")
-            
-            # Valores
-            st.subheader("📋 Amostra de Valores")
-            
-            col_amostra1, col_amostra2 = st.columns(2)
-            
-            with col_amostra1:
-                st.write("**Primeiros 10 valores:**")
-                st.write(df[coluna_selecionada].head(10).tolist())
-            
-            with col_amostra2:
-                st.write("**Últimos 10 valores:**")
-                st.write(df[coluna_selecionada].tail(10).tolist())
-            
-            # Se for categórica, mostrar distribuição
-            if analise['tipo_detalhado'] == 'Texto/Categórica' and analise['valores_unicos'] <= 100:
-                st.subheader("📊 Distribuição de Valores")
+            if analise is not None:  # VERIFICAÇÃO ADICIONADA
+                col_info1, col_info2 = st.columns(2)
                 
-                contagem = df[coluna_selecionada].value_counts()
-                df_contagem = pd.DataFrame({
-                    'Valor': contagem.index,
-                    'Contagem': contagem.values,
-                    'Percentual': (contagem.values / len(df) * 100)
-                })
+                with col_info1:
+                    # CORREÇÃO: Converter para string e verificar se é numérico
+                    total_val = analise['total']
+                    if isinstance(total_val, (int, float, np.integer, np.floating)):
+                        st.metric("Total de Valores", f"{total_val:,}", key="total_valores_tab3")
+                    else:
+                        st.metric("Total de Valores", str(total_val), key="total_valores_tab3")
+                    
+                    nao_nulos_val = analise['nao_nulos']
+                    if isinstance(nao_nulos_val, (int, float, np.integer, np.floating)):
+                        st.metric("Valores Não Nulos", f"{nao_nulos_val:,}", key="nao_nulos_tab3")
+                    else:
+                        st.metric("Valores Não Nulos", str(nao_nulos_val), key="nao_nulos_tab3")
+                    
+                    valores_unicos_val = analise['valores_unicos']
+                    if isinstance(valores_unicos_val, (int, float, np.integer, np.floating)):
+                        st.metric("Valores Únicos", f"{valores_unicos_val:,}", key="valores_unicos_tab3")
+                    else:
+                        st.metric("Valores Únicos", str(valores_unicos_val), key="valores_unicos_tab3")
                 
-                st.dataframe(
-                    df_contagem.style.format({'Contagem': '{:,}', 'Percentual': '{:.1f}%'}),
-                    use_container_width=True
-                )
-
+                with col_info2:
+                    nulos_val = analise['nulos']
+                    if isinstance(nulos_val, (int, float, np.integer, np.floating)):
+                        st.metric("Valores Nulos", f"{nulos_val:,}", key="nulos_tab3")
+                    else:
+                        st.metric("Valores Nulos", str(nulos_val), key="nulos_tab3")
+                    
+                    percentual_nulos_val = analise['percentual_nulos']
+                    if isinstance(percentual_nulos_val, (int, float, np.integer, np.floating)):
+                        st.metric("% Nulos", f"{percentual_nulos_val:.1f}%", key="percentual_nulos_tab3")
+                    else:
+                        st.metric("% Nulos", str(percentual_nulos_val) + "%", key="percentual_nulos_tab3")
+            else:
+                st.error(f"❌ Não foi possível analisar a coluna '{coluna_selecionada}'")
+                st.stop()
+                
 # =============================================================================
 # TAB 4: VISUALIZAR DADOS (MANTIDO IGUAL)
 # =============================================================================
