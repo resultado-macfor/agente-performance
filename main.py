@@ -768,53 +768,73 @@ def analisar_coluna(df, coluna):
     if coluna not in df.columns:
         return None
     
-    dados_coluna = df[coluna]
-    analise = {
-        'nome': coluna,
-        'tipo': str(dados_coluna.dtype),
-        'total': len(dados_coluna),
-        'nao_nulos': dados_coluna.notna().sum(),
-        'nulos': dados_coluna.isna().sum(),
-        'percentual_nulos': (dados_coluna.isna().sum() / len(dados_coluna)) * 100,
-        'valores_unicos': dados_coluna.nunique()
-    }
-    
-    # Se for numérica
-    if pd.api.types.is_numeric_dtype(dados_coluna):
-        dados_validos = dados_coluna.dropna()
-        if len(dados_validos) > 0:
+    try:
+        dados_coluna = df[coluna]
+        analise = {
+            'nome': coluna,
+            'tipo': str(dados_coluna.dtype),
+            'total': len(dados_coluna),
+            'nao_nulos': dados_coluna.notna().sum(),
+            'nulos': dados_coluna.isna().sum(),
+            'percentual_nulos': (dados_coluna.isna().sum() / len(dados_coluna)) * 100,
+            'valores_unicos': dados_coluna.nunique()
+        }
+        
+        # Se for numérica
+        if pd.api.types.is_numeric_dtype(dados_coluna):
+            dados_validos = dados_coluna.dropna()
+            if len(dados_validos) > 0:
+                analise.update({
+                    'tipo_detalhado': 'Numérica',
+                    'min': dados_validos.min(),
+                    'max': dados_validos.max(),
+                    'media': dados_validos.mean(),
+                    'mediana': dados_validos.median(),
+                    'desvio_padrao': dados_validos.std(),
+                    'q1': dados_validos.quantile(0.25),
+                    'q3': dados_validos.quantile(0.75),
+                    'assimetria': dados_validos.skew(),
+                    'curtose': dados_validos.kurt()
+                })
+            else:
+                analise.update({'tipo_detalhado': 'Numérica (vazia)'})
+        # Se for categórica/texto
+        elif dados_coluna.dtype == 'object':
             analise.update({
-                'tipo_detalhado': 'Numérica',
-                'min': dados_validos.min(),
-                'max': dados_validos.max(),
-                'media': dados_validos.mean(),
-                'mediana': dados_validos.median(),
-                'desvio_padrao': dados_validos.std(),
-                'q1': dados_validos.quantile(0.25),
-                'q3': dados_validos.quantile(0.75),
-                'assimetria': dados_validos.skew(),
-                'curtose': dados_validos.kurt()
+                'tipo_detalhado': 'Texto/Categórica',
+                'valores_mais_comuns': dados_coluna.value_counts().head(10).to_dict(),
+                'valor_mais_frequente': dados_coluna.mode().iloc[0] if not dados_coluna.mode().empty else None,
+                'frequencia_valor_mais_comum': dados_coluna.value_counts().iloc[0] if not dados_coluna.empty else 0
             })
-    # Se for categórica/texto
-    elif dados_coluna.dtype == 'object':
-        analise.update({
-            'tipo_detalhado': 'Texto/Categórica',
-            'valores_mais_comuns': dados_coluna.value_counts().head(10).to_dict(),
-            'valor_mais_frequente': dados_coluna.mode().iloc[0] if not dados_coluna.mode().empty else None,
-            'frequencia_valor_mais_comum': dados_coluna.value_counts().iloc[0] if not dados_coluna.empty else 0
-        })
-    # Se for data
-    elif pd.api.types.is_datetime64_any_dtype(dados_coluna):
-        dados_validos = dados_coluna.dropna()
-        if len(dados_validos) > 0:
-            analise.update({
-                'tipo_detalhado': 'Data',
-                'data_minima': dados_validos.min(),
-                'data_maxima': dados_validos.max(),
-                'intervalo_dias': (dados_validos.max() - dados_validos.min()).days
-            })
-    
-    return analise
+        # Se for data
+        elif pd.api.types.is_datetime64_any_dtype(dados_coluna):
+            dados_validos = dados_coluna.dropna()
+            if len(dados_validos) > 0:
+                analise.update({
+                    'tipo_detalhado': 'Data',
+                    'data_minima': dados_validos.min(),
+                    'data_maxima': dados_validos.max(),
+                    'intervalo_dias': (dados_validos.max() - dados_validos.min()).days
+                })
+            else:
+                analise.update({'tipo_detalhado': 'Data (vazia)'})
+        else:
+            analise.update({'tipo_detalhado': 'Outro'})
+            
+        return analise
+        
+    except Exception as e:
+        # Retorna uma análise básica em caso de erro
+        return {
+            'nome': coluna,
+            'tipo': 'Erro',
+            'tipo_detalhado': f'Erro na análise: {str(e)[:50]}...',
+            'total': len(df),
+            'nao_nulos': 0,
+            'nulos': len(df),
+            'percentual_nulos': 100,
+            'valores_unicos': 0
+        }
 
 def criar_visualizacao_coluna(df, coluna):
     """Cria visualização adequada para o tipo de coluna"""
@@ -1564,126 +1584,341 @@ with tab5:
 # TAB 6: NOVA ABA - PERFORMANCE DE CAMPANHAS
 # =============================================================================
 
-# No começo da aba de Performance, modifique assim:
+# =============================================================================
+# TAB 6: NOVA ABA - PERFORMANCE DE CAMPANHAS (VERSÃO SIMPLIFICADA)
+# =============================================================================
+
 with tab6:
     st.header("🎯 Performance de Campanhas")
-    st.markdown("Análise detalhada de campanhas de marketing com insights baseados em IA")
+    st.markdown("Análise detalhada de campanhas de marketing")
     
-    # Usar os dados já carregados no app
-    df_campaigns = st.session_state.df_completo
+    # Usar os dados já carregados
+    df = st.session_state.df_completo
     
-    if df_campaigns.empty:
-        st.warning("📭 Nenhum dado carregado. Use o botão 'Carregar TODOS os Dados' na sidebar para começar.")
+    if df.empty:
+        st.warning("📭 Nenhum dado carregado. Use o botão 'Carregar TODOS os Dados' na sidebar.")
         st.stop()
     
-    # Verificar se temos as colunas mínimas necessárias
-    required_columns = ['campaign', 'date', 'spend']
-    missing_columns = [col for col in required_columns if col not in df_campaigns.columns]
-    
-    if missing_columns:
-        st.error(f"❌ Colunas necessárias não encontradas: {', '.join(missing_columns)}")
-        st.info("ℹ️ As colunas 'campaign', 'date' e 'spend' são obrigatórias para análise de campanhas.")
+    # Verificar colunas mínimas
+    if 'campaign' not in df.columns:
+        st.error("❌ Coluna 'campaign' não encontrada nos dados.")
+        st.info("ℹ️ Esta análise requer uma coluna chamada 'campaign' para identificar as campanhas.")
         st.stop()
     
-    # Criar coluna conversions se não existir
-    if 'conversions' not in df_campaigns.columns:
-        if 'purchases' in df_campaigns.columns:
-            df_campaigns['conversions'] = df_campaigns['purchases'].fillna(0)
-        elif 'add_to_cart' in df_campaigns.columns:
-            df_campaigns['conversions'] = df_campaigns['add_to_cart'].fillna(0)
-        elif 'landing_page_views' in df_campaigns.columns:
-            df_campaigns['conversions'] = df_campaigns['landing_page_views'].fillna(0)
-        else:
-            df_campaigns['conversions'] = 0
+    # Identificar colunas numéricas disponíveis
+    numeric_cols = st.session_state.colunas_numericas
+    if not numeric_cols:
+        st.warning("⚠️ Nenhuma coluna numérica identificada para análise.")
+        st.stop()
     
-    # Criar coluna revenue se não existir
-    if 'revenue' not in df_campaigns.columns:
-        df_campaigns['revenue'] = df_campaigns['conversions'] * 100  # Valor estimado
-    
-    # Criar coluna roas se não existir
-    if 'roas' not in df_campaigns.columns:
-        df_campaigns['roas'] = df_campaigns['revenue'] / df_campaigns['spend'].replace(0, 1)
-    
-    # Criar coluna ctr se não existir
-    if 'ctr' not in df_campaigns.columns and 'clicks' in df_campaigns.columns and 'impressions' in df_campaigns.columns:
-        df_campaigns['ctr'] = (df_campaigns['clicks'] / df_campaigns['impressions'].replace(0, 1)) * 100
-    
-    # Criar coluna cpc se não existir
-    if 'cpc' not in df_campaigns.columns and 'spend' in df_campaigns.columns and 'clicks' in df_campaigns.columns:
-        df_campaigns['cpc'] = df_campaigns['spend'] / df_campaigns['clicks'].replace(0, 1)
-    
-    # Criar coluna conversion_rate se não existir
-    if 'conversion_rate' not in df_campaigns.columns and 'conversions' in df_campaigns.columns and 'clicks' in df_campaigns.columns:
-        df_campaigns['conversion_rate'] = (df_campaigns['conversions'] / df_campaigns['clicks'].replace(0, 1)) * 100
-    
-    # Sidebar interna para configuração de análise de campanha
-    with st.sidebar.expander("🎯 Configuração da Análise", expanded=True):
-        st.subheader("Selecionar Campanha")
-        
+    # Sidebar para configuração
+    with st.sidebar.expander("⚙️ Configuração da Análise", expanded=True):
         # Listar campanhas disponíveis
-        available_campaigns = df_campaigns['campaign'].unique() if 'campaign' in df_campaigns.columns else []
+        campaigns = sorted(df['campaign'].dropna().unique())
         
-        if len(available_campaigns) == 0:
-            st.error("Nenhuma campanha encontrada nos dados carregados")
+        if not campaigns:
+            st.error("Nenhuma campanha encontrada na coluna 'campaign'")
             st.stop()
         
         selected_campaign = st.selectbox(
-            "Escolha a campanha para análise:",
-            options=available_campaigns,
+            "Selecione a campanha:",
+            options=campaigns,
             index=0,
-            help="Selecione a campanha que deseja analisar"
+            help="Escolha uma campanha para análise detalhada"
         )
         
-        st.session_state.selected_campaign = selected_campaign
+        # Selecionar métricas para análise
+        available_metrics = [col for col in numeric_cols if col in df.columns]
         
-        # Métrica de foco
-        st.subheader("Foco da Análise")
+        metric_options = []
+        for metric in available_metrics:
+            # Traduzir nomes comuns
+            if metric == 'spend':
+                metric_options.append(("💰 Investimento (spend)", metric))
+            elif metric == 'impressions':
+                metric_options.append(("👁️ Impressões", metric))
+            elif metric == 'clicks':
+                metric_options.append(("🖱️ Cliques", metric))
+            elif 'conversion' in metric.lower():
+                metric_options.append((f"🔄 {metric}", metric))
+            elif 'revenue' in metric.lower():
+                metric_options.append((f"💸 {metric}", metric))
+            elif 'cpc' in metric.lower():
+                metric_options.append((f"🎯 {metric}", metric))
+            elif 'ctr' in metric.lower():
+                metric_options.append((f"📊 {metric}", metric))
+            elif 'roas' in metric.lower():
+                metric_options.append((f"📈 {metric}", metric))
+            else:
+                metric_options.append((metric, metric))
         
-        # Verificar quais métricas estão disponíveis
-        available_metrics = []
-        metric_options = [
-            ("ROAS (Retorno sobre Investimento)", "roas"),
-            ("Conversões", "conversions"),
-            ("CTR (Taxa de Cliques)", "ctr"),
-            ("CPC (Custo por Clique)", "cpc"),
-            ("Investimento Total", "spend"),
-            ("Receita Gerada", "revenue"),
-            ("Impressões", "impressions"),
-            ("Cliques", "clicks")
-        ]
+        selected_metrics = st.multiselect(
+            "Métricas para análise:",
+            options=[m[0] for m in metric_options],
+            default=[m[0] for m in metric_options[:3]],
+            help="Selecione as métricas que deseja analisar"
+        )
         
-        for display_name, metric_name in metric_options:
-            if metric_name in df_campaigns.columns:
-                available_metrics.append((display_name, metric_name))
+        # Converter nomes exibidos para nomes reais das colunas
+        selected_metric_names = []
+        for display_name in selected_metrics:
+            for opt_display, opt_real in metric_options:
+                if opt_display == display_name:
+                    selected_metric_names.append(opt_real)
+                    break
+    
+    # Filtrar dados da campanha selecionada
+    campaign_data = df[df['campaign'] == selected_campaign].copy()
+    
+    if campaign_data.empty:
+        st.error(f"❌ Nenhum dado encontrado para a campanha '{selected_campaign}'")
+        st.stop()
+    
+    # Ordenar por data se disponível
+    if 'date' in campaign_data.columns:
+        campaign_data = campaign_data.sort_values('date')
+    
+    # ====================
+    # DASHBOARD DE MÉTRICAS
+    # ====================
+    
+    st.subheader(f"📊 Dashboard - {selected_campaign}")
+    
+    # Mostrar período se tiver data
+    if 'date' in campaign_data.columns:
+        start_date = campaign_data['date'].min()
+        end_date = campaign_data['date'].max()
+        days_active = (end_date - start_date).days + 1
         
-        if not available_metrics:
-            metric_focus = "spend"
-            st.warning("⚠️ Usando 'Investimento Total' como métrica padrão")
-        else:
-            metric_focus = st.selectbox(
-                "Métrica principal para análise:",
-                options=[m[0] for m in available_metrics],
-                index=0,
-                help="Selecione a métrica que será o foco da análise"
+        col_info1, col_info2, col_info3 = st.columns(3)
+        with col_info1:
+            st.metric("📅 Início", start_date.strftime('%d/%m/%Y'))
+        with col_info2:
+            st.metric("📅 Término", end_date.strftime('%d/%m/%Y'))
+        with col_info3:
+            st.metric("⏱️ Dias ativa", days_active)
+    
+    # Métricas principais em cards
+    st.subheader("📈 Métricas Principais")
+    
+    # Mostrar até 6 métricas em linha
+    cols = st.columns(min(6, len(selected_metric_names)))
+    
+    for idx, metric in enumerate(selected_metric_names[:6]):
+        with cols[idx % len(cols)]:
+            if metric in campaign_data.columns:
+                total_value = campaign_data[metric].sum()
+                avg_value = campaign_data[metric].mean()
+                
+                # Formatar valores
+                if total_value >= 1000000:
+                    display_total = f"{total_value/1000000:.1f}M"
+                elif total_value >= 1000:
+                    display_total = f"{total_value/1000:.1f}K"
+                else:
+                    display_total = f"{total_value:.0f}"
+                
+                # Nome amigável
+                metric_name = next((m[0] for m in metric_options if m[1] == metric), metric)
+                
+                st.metric(
+                    metric_name,
+                    display_total,
+                    f"Média: {avg_value:.2f}"
+                )
+    
+    # ====================
+    # GRÁFICOS
+    # ====================
+    
+    st.subheader("📊 Visualizações")
+    
+    tab_charts, tab_table = st.tabs(["Gráficos", "Dados"])
+    
+    with tab_charts:
+        # Gráfico de linhas para métricas ao longo do tempo
+        if 'date' in campaign_data.columns and selected_metric_names:
+            fig = go.Figure()
+            
+            colors = px.colors.qualitative.Set1
+            
+            for idx, metric in enumerate(selected_metric_names[:5]):  # Limitar a 5 métricas
+                if metric in campaign_data.columns:
+                    metric_name = next((m[0] for m in metric_options if m[1] == metric), metric)
+                    
+                    # Normalizar para melhor visualização
+                    if campaign_data[metric].max() > 0:
+                        normalized = campaign_data[metric] / campaign_data[metric].max()
+                    else:
+                        normalized = campaign_data[metric]
+                    
+                    fig.add_trace(go.Scatter(
+                        x=campaign_data['date'],
+                        y=normalized,
+                        name=metric_name,
+                        mode='lines+markers',
+                        line=dict(color=colors[idx % len(colors)], width=2),
+                        yaxis='y' if idx == 0 else f'y{idx+1}'
+                    ))
+            
+            fig.update_layout(
+                title=f"Evolução das Métricas - {selected_campaign}",
+                xaxis_title="Data",
+                hovermode='x unified',
+                template='plotly_white',
+                height=500
             )
-            # Converter nome exibido para nome da coluna
-            metric_focus = next(m[1] for m in available_metrics if m[0] == metric_focus)
+            
+            st.plotly_chart(fig, use_container_width=True)
         
-        # Período de análise
-        st.subheader("Período da Análise")
-        analysis_period = st.radio(
-            "Período para análise:",
-            ["Todo o período carregado", "Últimos 30 dias", "Últimos 60 dias", "Últimos 90 dias"],
-            index=0,
-            horizontal=True
+        # Gráfico de barras para métricas totais
+        if selected_metric_names:
+            fig2 = go.Figure()
+            
+            totals = []
+            metric_names_display = []
+            
+            for metric in selected_metric_names[:8]:  # Limitar a 8 métricas
+                if metric in campaign_data.columns:
+                    totals.append(campaign_data[metric].sum())
+                    metric_names_display.append(next((m[0] for m in metric_options if m[1] == metric), metric))
+            
+            if totals:
+                fig2.add_trace(go.Bar(
+                    x=metric_names_display,
+                    y=totals,
+                    marker_color='#4f46e5',
+                    text=[f"{val:,.0f}" for val in totals],
+                    textposition='auto'
+                ))
+                
+                fig2.update_layout(
+                    title=f"Totais por Métrica - {selected_campaign}",
+                    xaxis_title="Métrica",
+                    yaxis_title="Valor Total",
+                    template='plotly_white',
+                    height=400
+                )
+                
+                st.plotly_chart(fig2, use_container_width=True)
+    
+    with tab_table:
+        # Tabela com dados brutos
+        st.subheader("📋 Dados da Campanha")
+        
+        # Selecionar colunas para mostrar
+        display_cols = ['date'] if 'date' in campaign_data.columns else []
+        display_cols.extend(selected_metric_names)
+        
+        # Manter apenas colunas que existem
+        display_cols = [col for col in display_cols if col in campaign_data.columns]
+        
+        if display_cols:
+            st.dataframe(
+                campaign_data[display_cols].sort_values(
+                    'date' if 'date' in display_cols else display_cols[0],
+                    ascending=False
+                ),
+                use_container_width=True,
+                height=400
+            )
+            
+            # Estatísticas descritivas
+            st.subheader("📊 Estatísticas Descritivas")
+            
+            stats_df = campaign_data[selected_metric_names].describe().T
+            st.dataframe(stats_df, use_container_width=True)
+    
+    # ====================
+    # ANÁLISE COM IA (OPCIONAL)
+    # ====================
+    
+    if gemini_api_key and modelo_texto:
+        st.subheader("🤖 Análise com IA")
+        
+        if st.button("🔍 Gerar Insights com IA", type="secondary"):
+            with st.spinner("Analisando dados com IA..."):
+                try:
+                    # Preparar dados para a IA
+                    summary_stats = {}
+                    for metric in selected_metric_names[:5]:  # Limitar a 5 métricas
+                        if metric in campaign_data.columns:
+                            summary_stats[metric] = {
+                                'total': campaign_data[metric].sum(),
+                                'media': campaign_data[metric].mean(),
+                                'min': campaign_data[metric].min(),
+                                'max': campaign_data[metric].max(),
+                                'tendencia': 'crescente' if len(campaign_data) > 1 and campaign_data[metric].iloc[-1] > campaign_data[metric].iloc[0] else 'decrescente'
+                            }
+                    
+                    prompt = f"""
+                    Analise os dados desta campanha de marketing:
+                    
+                    Campanha: {selected_campaign}
+                    Período: {f"{start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}" if 'date' in campaign_data.columns else "Período não especificado"}
+                    Total de registros: {len(campaign_data)}
+                    
+                    Métricas analisadas:
+                    {json.dumps(summary_stats, indent=2)}
+                    
+                    Forneça:
+                    1. Um resumo executivo (2-3 parágrafos)
+                    2. Pontos fortes identificados
+                    3. Pontos de atenção
+                    4. 3 recomendações para melhorar
+                    
+                    Seja conciso e prático.
+                    """
+                    
+                    response = modelo_texto.generate_content(prompt)
+                    st.markdown(response.text)
+                    
+                except Exception as e:
+                    st.error(f"Erro na análise com IA: {str(e)}")
+    else:
+        st.info("ℹ️ Configure a chave da API Gemini para usar análise com IA")
+    
+    # ====================
+    # DOWNLOAD DE DADOS
+    # ====================
+    
+    st.subheader("📥 Exportar Dados")
+    
+    col_dl1, col_dl2 = st.columns(2)
+    
+    with col_dl1:
+        # CSV da campanha
+        csv_data = campaign_data.to_csv(index=False)
+        st.download_button(
+            label="💾 Baixar Dados da Campanha (CSV)",
+            data=csv_data,
+            file_name=f"campanha_{selected_campaign}_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv"
         )
+    
+    with col_dl2:
+        # Relatório simples
+        report_text = f"""
+        RELATÓRIO DE CAMPANHA - {selected_campaign}
+        Data: {datetime.now().strftime('%d/%m/%Y %H:%M')}
         
-        # Botão para gerar análise
-        generate_analysis = st.button(
-            "🚀 Gerar Análise com IA",
-            type="primary",
-            use_container_width=True,
-            help="Clique para gerar análise detalhada usando IA"
+        PERÍODO: {f"{start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}" if 'date' in campaign_data.columns else "Não disponível"}
+        DIAS ATIVA: {days_active if 'date' in campaign_data.columns else "N/A"}
+        
+        MÉTRICAS:
+        """
+        
+        for metric in selected_metric_names[:10]:
+            if metric in campaign_data.columns:
+                total = campaign_data[metric].sum()
+                avg = campaign_data[metric].mean()
+                report_text += f"\n- {metric}: Total={total:,.2f}, Média={avg:,.2f}"
+        
+        st.download_button(
+            label="📄 Baixar Relatório (TXT)",
+            data=report_text,
+            file_name=f"relatorio_{selected_campaign}_{datetime.now().strftime('%Y%m%d')}.txt",
+            mime="text/plain"
         )
 
 # =============================================================================
