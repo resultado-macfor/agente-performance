@@ -303,32 +303,46 @@ def load_all_columns_data(_client, data_inicio=None, data_fim=None, data_sources
 def load_campaign_performance_data(_client, start_date=None, end_date=None, datasources=None, campaigns=None):
     """Carrega dados específicos para análise de performance de campanhas"""
     try:
-        query = """
+        # Primeiro, vamos descobrir quais colunas existem na tabela
+        query_schema = """
+        SELECT column_name, data_type 
+        FROM `macfor-media-flow.ads.INFORMATION_SCHEMA.COLUMNS`
+        WHERE table_name = 'app_view_campaigns'
+        AND column_name IN (
+            'date', 'campaign', 'datasource', 'impressions', 'clicks', 
+            'spend', 'conversions', 'conversion_value', 'cpc', 'cpm', 
+            'ctr', 'conversion_rate', 'roas', 'reach', 'frequency',
+            'video_views', 'video_view_rate', 'video_plays', 'engagements',
+            'engagement_rate', 'landing_page_views', 'add_to_cart', 
+            'purchases', 'revenue'
+        )
+        """
+        
+        try:
+            schema_df = _client.query(query_schema).to_dataframe()
+            colunas_existentes = schema_df['column_name'].tolist()
+            
+            # Verificar se a coluna conversions existe
+            if 'conversions' not in colunas_existentes:
+                st.warning("⚠️ A coluna 'conversions' não existe na tabela. Vou usar colunas alternativas.")
+            
+            # Construir a query apenas com as colunas que existem
+            colunas_query = ", ".join(colunas_existentes)
+            
+        except Exception as schema_error:
+            # Se não conseguir obter o schema, usar colunas padrão
+            st.warning(f"Não foi possível obter schema: {schema_error}")
+            colunas_query = """
+                date, campaign, datasource, impressions, clicks, spend, 
+                conversion_value, cpc, cpm, ctr, conversion_rate, roas, 
+                reach, frequency, video_views, video_view_rate, video_plays, 
+                engagements, engagement_rate, landing_page_views, add_to_cart, 
+                purchases, revenue
+            """
+        
+        query = f"""
         SELECT 
-            date,
-            campaign,
-            datasource,
-            impressions,
-            clicks,
-            spend,
-            conversions,
-            conversion_value,
-            cpc,
-            cpm,
-            ctr,
-            conversion_rate,
-            roas,
-            reach,
-            frequency,
-            video_views,
-            video_view_rate,
-            video_plays,
-            engagements,
-            engagement_rate,
-            landing_page_views,
-            add_to_cart,
-            purchases,
-            revenue
+            {colunas_query}
         FROM `macfor-media-flow.ads.app_view_campaigns`
         WHERE 1=1
         """
@@ -358,6 +372,21 @@ def load_campaign_performance_data(_client, start_date=None, end_date=None, data
             if 'date' in df.columns:
                 df['date'] = pd.to_datetime(df['date'])
             
+            # Criar coluna conversions se não existir (pode ser purchases ou outra)
+            if 'conversions' not in df.columns:
+                if 'purchases' in df.columns:
+                    df['conversions'] = df['purchases'].fillna(0)
+                    st.info("ℹ️ Usando a coluna 'purchases' como 'conversions'")
+                elif 'add_to_cart' in df.columns:
+                    df['conversions'] = df['add_to_cart'].fillna(0)
+                    st.info("ℹ️ Usando a coluna 'add_to_cart' como 'conversions'")
+                elif 'landing_page_views' in df.columns:
+                    df['conversions'] = df['landing_page_views'].fillna(0)
+                    st.info("ℹ️ Usando a coluna 'landing_page_views' como 'conversions'")
+                else:
+                    df['conversions'] = 0
+                    st.warning("⚠️ Nenhuma coluna de conversão encontrada. Usando valor 0.")
+            
             # Converter colunas numéricas
             numeric_cols = ['impressions', 'clicks', 'spend', 'conversions', 'conversion_value',
                           'cpc', 'cpm', 'ctr', 'conversion_rate', 'roas', 'reach', 'frequency',
@@ -374,7 +403,7 @@ def load_campaign_performance_data(_client, start_date=None, end_date=None, data
         st.error(f"Erro ao carregar dados de campanhas: {str(e)}")
         return pd.DataFrame()
 
-def generate_campaign_analysis_with_ai(df_campaigns, selected_campaign, date_range, metric_focus, client=None):
+def generate_campaign_analysis_with_ai(df_campaigns, selected_campaign, date_range, metric_focus):
     """Gera análise detalhada da campanha usando Gemini IA"""
     
     if df_campaigns.empty:
@@ -386,50 +415,41 @@ def generate_campaign_analysis_with_ai(df_campaigns, selected_campaign, date_ran
     if campaign_data.empty:
         return f"Nenhum dado encontrado para a campanha '{selected_campaign}'."
     
-    # Ordenar por data
+    # Ordenar por data se a coluna existir
     if 'date' in campaign_data.columns:
         campaign_data = campaign_data.sort_values('date')
     
-    # Calcular métricas resumidas
-    total_spend = campaign_data['spend'].sum() if 'spend' in campaign_data.columns else 0
-    total_conversions = campaign_data['conversions'].sum() if 'conversions' in campaign_data.columns else 0
-    total_revenue = campaign_data['revenue'].sum() if 'revenue' in campaign_data.columns else 0
-    total_impressions = campaign_data['impressions'].sum() if 'impressions' in campaign_data.columns else 0
-    total_clicks = campaign_data['clicks'].sum() if 'clicks' in campaign_data.columns else 0
+    # Calcular métricas disponíveis
+    metrics_summary = {}
     
-    avg_cpc = campaign_data['cpc'].mean() if 'cpc' in campaign_data.columns else 0
-    avg_ctr = campaign_data['ctr'].mean() if 'ctr' in campaign_data.columns else 0
-    avg_roas = campaign_data['roas'].mean() if 'roas' in campaign_data.columns else 0
-    avg_conversion_rate = campaign_data['conversion_rate'].mean() if 'conversion_rate' in campaign_data.columns else 0
+    # Métricas básicas
+    for metric in ['spend', 'impressions', 'clicks', 'conversions', 'revenue']:
+        if metric in campaign_data.columns:
+            metrics_summary[f'total_{metric}'] = campaign_data[metric].sum()
+            metrics_summary[f'avg_{metric}_per_day'] = campaign_data[metric].mean()
     
-    # Calcular tendências
-    if len(campaign_data) > 1 and 'date' in campaign_data.columns:
-        # Última semana vs semana anterior
-        latest_date = campaign_data['date'].max()
-        week_ago = latest_date - timedelta(days=7)
-        
-        last_week_data = campaign_data[campaign_data['date'] > week_ago]
-        previous_week_data = campaign_data[
-            (campaign_data['date'] > week_ago - timedelta(days=14)) & 
-            (campaign_data['date'] <= week_ago)
-        ]
-        
-        if not last_week_data.empty and not previous_week_data.empty:
-            last_week_spend = last_week_data['spend'].sum() if 'spend' in last_week_data.columns else 0
-            previous_week_spend = previous_week_data['spend'].sum() if 'spend' in previous_week_data.columns else 0
-            spend_change = ((last_week_spend - previous_week_spend) / previous_week_spend * 100) if previous_week_spend > 0 else 0
-            
-            last_week_conversions = last_week_data['conversions'].sum() if 'conversions' in last_week_data.columns else 0
-            previous_week_conversions = previous_week_data['conversions'].sum() if 'conversions' in previous_week_data.columns else 0
-            conversions_change = ((last_week_conversions - previous_week_conversions) / previous_week_conversions * 100) if previous_week_conversions > 0 else 0
-        else:
-            spend_change = 0
-            conversions_change = 0
-    else:
-        spend_change = 0
-        conversions_change = 0
+    # Métricas calculadas
+    if 'spend' in campaign_data.columns and 'clicks' in campaign_data.columns:
+        total_clicks = metrics_summary.get('total_clicks', 0)
+        total_spend = metrics_summary.get('total_spend', 0)
+        if total_clicks > 0:
+            metrics_summary['cpc'] = total_spend / total_clicks
     
-    # Preparar prompt para Gemini
+    if 'clicks' in campaign_data.columns and 'impressions' in campaign_data.columns:
+        total_impressions = metrics_summary.get('total_impressions', 0)
+        if total_impressions > 0:
+            metrics_summary['ctr'] = (metrics_summary.get('total_clicks', 0) / total_impressions) * 100
+    
+    if 'spend' in campaign_data.columns and 'revenue' in campaign_data.columns:
+        total_revenue = metrics_summary.get('total_revenue', 0)
+        if total_spend > 0:
+            metrics_summary['roas'] = total_revenue / total_spend
+    
+    if 'clicks' in campaign_data.columns and 'conversions' in campaign_data.columns:
+        if total_clicks > 0:
+            metrics_summary['conversion_rate'] = (metrics_summary.get('total_conversions', 0) / total_clicks) * 100
+    
+    # Preparar prompt adaptado às métricas disponíveis
     prompt = f"""
     # ANÁLISE DE PERFORMANCE DE CAMPANHA - RELATÓRIO ESPECIALIZADO
     
@@ -439,84 +459,21 @@ def generate_campaign_analysis_with_ai(df_campaigns, selected_campaign, date_ran
     - **Foco Principal:** {metric_focus}
     - **Total de Registros:** {len(campaign_data)} dias
     
-    ## DADOS RESUMIDOS DA CAMPANHA:
-    
-    ### MÉTRICAS DE INVESTIMENTO:
-    - **Investimento Total:** R$ {total_spend:,.2f}
-    - **Mudança Semanal:** {'+' if spend_change >= 0 else ''}{spend_change:.1f}%
-    
-    ### MÉTRICAS DE PERFORMANCE:
-    - **Conversões Totais:** {total_conversions:,.0f}
-    - **Mudança Semanal:** {'+' if conversions_change >= 0 else ''}{conversions_change:.1f}%
-    - **Receita Total:** R$ {total_revenue:,.2f}
-    
-    ### MÉTRICAS DE EFICIÊNCIA:
-    - **CPC Médio:** R$ {avg_cpc:,.2f}
-    - **CTR Médio:** {avg_ctr:.2f}%
-    - **Taxa de Conversão Média:** {avg_conversion_rate:.2f}%
-    - **ROAS Médio:** {avg_roas:.2f}x
-    
-    ### MÉTRICAS DE ALCANCE:
-    - **Impressões Totais:** {total_impressions:,.0f}
-    - **Cliques Totais:** {total_clicks:,.0f}
-    
-    ## TENDÊNCIAS IDENTIFICADAS:
-    {campaign_data.tail(30).to_string() if len(campaign_data) > 0 else "Dados insuficientes para análise de tendências"}
+    ## DADOS DISPONÍVEIS:
+    {campaign_data.head(20).to_string() if len(campaign_data) > 0 else "Dados insuficientes"}
     
     ## INSTRUÇÕES PARA A ANÁLISE:
     
-    Você é um analista de marketing digital especializado. Crie um relatório de performance completo com:
+    Você é um analista de marketing digital especializado. Crie um relatório de performance completo com base nos dados disponíveis.
     
-    1. **📊 RESUMO EXECUTIVO** (3-4 parágrafos)
-       - Performance geral da campanha
-       - Principais conquistas e destaques
-       - Pontos de atenção críticos
-       - Avaliação geral (Excelente/Boa/Regular/Precisa Melhorar)
+    Inclua:
+    1. **📊 RESUMO EXECUTIVO** - Performance geral
+    2. **🎯 ANÁLISE DA MÉTRICA PRINCIPAL** - {metric_focus}
+    3. **💰 ANÁLISE DE CUSTOS E RESULTADOS** 
+    4. **🚀 RECOMENDAÇÕES PRÁTICAS**
+    5. **📈 PRÓXIMOS PASSOS**
     
-    2. **🎯 ANÁLISE DA MÉTRICA PRINCIPAL: {metric_focus}**
-       - Tendência ao longo do tempo (melhorando/piorando/estável)
-       - Comparação com benchmarks do setor
-       - Fatores que influenciam esta métrica
-       - Insights específicos e ações recomendadas
-    
-    3. **💰 ANÁLISE DE CUSTOS E ROI**
-       - Eficiência do investimento (CPC, CPA, ROAS)
-       - Comparação com períodos anteriores
-       - Identificação de oportunidades de otimização
-       - Sugestões de ajuste no orçamento
-    
-    4. **📈 ANÁLISE DE ENGAGEMENT E ALCANCE**
-       - Performance de CTR e taxas de interação
-       - Qualidade do tráfego gerado
-       - Retenção e engajamento do público
-       - Oportunidades para aumentar o alcance
-    
-    5. **🔄 ANÁLISE DE CONVERSÃO**
-       - Taxas de conversão e qualidade
-       - Valor por conversão (LTV)
-       - Funil de conversão identificado
-       - Pontos de fricção e oportunidades
-    
-    6. **🚀 RECOMENDAÇÕES ESTRATÉGICAS** (TOP 5)
-       - 1-2 recomendações para CURTO PRAZO (próximos 7 dias)
-       - 2-3 recomendações para MÉDIO PRAZO (próximos 30 dias)
-       - 1-2 recomendações para LONGO PRAZO (próximos 90 dias)
-       - Priorização clara com impacto esperado
-    
-    7. **🔮 PREVISÕES E OPORTUNIDADES**
-       - Projeções baseadas em tendências atuais
-       - Oportunidades de crescimento identificadas
-       - Cenários de otimização (conservador/agressivo)
-       - KPI's críticos para monitoramento contínuo
-    
-    ## FORMATO DO RELATÓRIO:
-    - Use markdown com formatação profissional
-    - Inclua emojis relevantes para cada seção (📊, 🎯, 💰, etc.)
-    - Seja direto, baseado em dados e prático
-    - Evite jargões excessivos, explique termos técnicos
-    - Use formatação como **negrito** para destaques
-    - Inclua listas com bullets para clareza
-    - Mantenha um tom profissional mas acessível
+    Seja prático, baseado em dados e evite jargões excessivos.
     """
     
     try:
@@ -524,8 +481,7 @@ def generate_campaign_analysis_with_ai(df_campaigns, selected_campaign, date_ran
             response = modelo_texto.generate_content(prompt)
             return response.text
         else:
-            # Fallback para análise básica se Gemini não estiver disponível
-            return generate_basic_campaign_analysis(campaign_data, selected_campaign, date_range, metric_focus)
+            return "⚠️ Gemini não configurado. Configure a API key para análises com IA."
     except Exception as e:
         return f"Erro ao gerar análise: {str(e)}"
 
@@ -1608,49 +1564,57 @@ with tab5:
 # TAB 6: NOVA ABA - PERFORMANCE DE CAMPANHAS
 # =============================================================================
 
+# No começo da aba de Performance, modifique assim:
 with tab6:
     st.header("🎯 Performance de Campanhas")
     st.markdown("Análise detalhada de campanhas de marketing com insights baseados em IA")
     
+    # Usar os dados já carregados no app
+    df_campaigns = st.session_state.df_completo
+    
     if df_campaigns.empty:
-        st.warning("📭 Nenhum dado de campanha carregado. Use o botão 'Carregar Dados Campanhas' na sidebar para começar.")
-        
-        with st.expander("ℹ️ Como usar esta funcionalidade"):
-            st.markdown("""
-            ### 🎯 O que é a Análise de Performance de Campanhas?
-            
-            Esta funcionalidade permite analisar campanhas de marketing digital com:
-            
-            1. **📊 Dashboard de Métricas**: Visualização de KPIs principais
-            2. **📈 Análise de Tendências**: Evolução temporal das campanhas
-            3. **🤖 Análise com IA**: Insights automáticos usando Gemini
-            4. **📋 Relatórios Detalhados**: Análises completas por campanha
-            
-            ### 📥 Como começar:
-            
-            1. **Configure as credenciais** do BigQuery na sidebar
-            2. **Selecione os Data Sources** (Facebook, Google Ads, TikTok)
-            3. **Defina o período** de análise
-            4. **Clique em 'Carregar Dados Campanhas'**
-            
-            ### 📊 Métricas Analisadas:
-            
-            - **Investimento (Spend)**: Total gasto nas campanhas
-            - **Conversões**: Número de conversões geradas
-            - **ROAS (Return on Ad Spend)**: Retorno sobre investimento
-            - **CPC (Cost per Click)**: Custo por clique
-            - **CTR (Click-Through Rate)**: Taxa de cliques
-            - **Taxa de Conversão**: Percentual de cliques que convertem
-            
-            ### 🚀 Benefícios:
-            
-            - **Tomada de decisão baseada em dados**
-            - **Identificação de oportunidades de otimização**
-            - **Comparação entre diferentes campanhas**
-            - **Previsões e recomendações automáticas**
-            """)
-        
+        st.warning("📭 Nenhum dado carregado. Use o botão 'Carregar TODOS os Dados' na sidebar para começar.")
         st.stop()
+    
+    # Verificar se temos as colunas mínimas necessárias
+    required_columns = ['campaign', 'date', 'spend']
+    missing_columns = [col for col in required_columns if col not in df_campaigns.columns]
+    
+    if missing_columns:
+        st.error(f"❌ Colunas necessárias não encontradas: {', '.join(missing_columns)}")
+        st.info("ℹ️ As colunas 'campaign', 'date' e 'spend' são obrigatórias para análise de campanhas.")
+        st.stop()
+    
+    # Criar coluna conversions se não existir
+    if 'conversions' not in df_campaigns.columns:
+        if 'purchases' in df_campaigns.columns:
+            df_campaigns['conversions'] = df_campaigns['purchases'].fillna(0)
+        elif 'add_to_cart' in df_campaigns.columns:
+            df_campaigns['conversions'] = df_campaigns['add_to_cart'].fillna(0)
+        elif 'landing_page_views' in df_campaigns.columns:
+            df_campaigns['conversions'] = df_campaigns['landing_page_views'].fillna(0)
+        else:
+            df_campaigns['conversions'] = 0
+    
+    # Criar coluna revenue se não existir
+    if 'revenue' not in df_campaigns.columns:
+        df_campaigns['revenue'] = df_campaigns['conversions'] * 100  # Valor estimado
+    
+    # Criar coluna roas se não existir
+    if 'roas' not in df_campaigns.columns:
+        df_campaigns['roas'] = df_campaigns['revenue'] / df_campaigns['spend'].replace(0, 1)
+    
+    # Criar coluna ctr se não existir
+    if 'ctr' not in df_campaigns.columns and 'clicks' in df_campaigns.columns and 'impressions' in df_campaigns.columns:
+        df_campaigns['ctr'] = (df_campaigns['clicks'] / df_campaigns['impressions'].replace(0, 1)) * 100
+    
+    # Criar coluna cpc se não existir
+    if 'cpc' not in df_campaigns.columns and 'spend' in df_campaigns.columns and 'clicks' in df_campaigns.columns:
+        df_campaigns['cpc'] = df_campaigns['spend'] / df_campaigns['clicks'].replace(0, 1)
+    
+    # Criar coluna conversion_rate se não existir
+    if 'conversion_rate' not in df_campaigns.columns and 'conversions' in df_campaigns.columns and 'clicks' in df_campaigns.columns:
+        df_campaigns['conversion_rate'] = (df_campaigns['conversions'] / df_campaigns['clicks'].replace(0, 1)) * 100
     
     # Sidebar interna para configuração de análise de campanha
     with st.sidebar.expander("🎯 Configuração da Análise", expanded=True):
@@ -1674,13 +1638,36 @@ with tab6:
         
         # Métrica de foco
         st.subheader("Foco da Análise")
-        metric_focus = st.selectbox(
-            "Métrica principal para análise:",
-            options=["ROAS (Retorno sobre Investimento)", "Conversões", "CTR (Taxa de Cliques)", 
-                    "CPC (Custo por Clique)", "Investimento Total", "Receita Gerada"],
-            index=0,
-            help="Selecione a métrica que será o foco da análise"
-        )
+        
+        # Verificar quais métricas estão disponíveis
+        available_metrics = []
+        metric_options = [
+            ("ROAS (Retorno sobre Investimento)", "roas"),
+            ("Conversões", "conversions"),
+            ("CTR (Taxa de Cliques)", "ctr"),
+            ("CPC (Custo por Clique)", "cpc"),
+            ("Investimento Total", "spend"),
+            ("Receita Gerada", "revenue"),
+            ("Impressões", "impressions"),
+            ("Cliques", "clicks")
+        ]
+        
+        for display_name, metric_name in metric_options:
+            if metric_name in df_campaigns.columns:
+                available_metrics.append((display_name, metric_name))
+        
+        if not available_metrics:
+            metric_focus = "spend"
+            st.warning("⚠️ Usando 'Investimento Total' como métrica padrão")
+        else:
+            metric_focus = st.selectbox(
+                "Métrica principal para análise:",
+                options=[m[0] for m in available_metrics],
+                index=0,
+                help="Selecione a métrica que será o foco da análise"
+            )
+            # Converter nome exibido para nome da coluna
+            metric_focus = next(m[1] for m in available_metrics if m[0] == metric_focus)
         
         # Período de análise
         st.subheader("Período da Análise")
@@ -1698,272 +1685,6 @@ with tab6:
             use_container_width=True,
             help="Clique para gerar análise detalhada usando IA"
         )
-    
-    # Layout principal da análise
-    col_main1, col_main2 = st.columns([2, 1])
-    
-    with col_main1:
-        st.markdown(f"### 📊 Análise da Campanha: **{selected_campaign}**")
-        
-        # Dashboard de métricas
-        st.subheader("📈 Dashboard de Performance")
-        
-        # Calcular métricas
-        campaign_data = df_campaigns[df_campaigns['campaign'] == selected_campaign]
-        
-        if not campaign_data.empty:
-            # Métricas em cards
-            col_metric1, col_metric2, col_metric3, col_metric4 = st.columns(4)
-            
-            with col_metric1:
-                total_spend = campaign_data['spend'].sum() if 'spend' in campaign_data.columns else 0
-                st.metric(
-                    "💰 Investimento Total",
-                    f"R$ {total_spend:,.0f}",
-                    help="Total investido na campanha"
-                )
-            
-            with col_metric2:
-                total_conversions = campaign_data['conversions'].sum() if 'conversions' in campaign_data.columns else 0
-                st.metric(
-                    "🔄 Total de Conversões",
-                    f"{total_conversions:,.0f}",
-                    help="Número total de conversões"
-                )
-            
-            with col_metric3:
-                avg_roas = campaign_data['roas'].mean() if 'roas' in campaign_data.columns else 0
-                st.metric(
-                    "📈 ROAS Médio",
-                    f"{avg_roas:.2f}x",
-                    help="Retorno médio sobre investimento"
-                )
-            
-            with col_metric4:
-                avg_cpc = campaign_data['cpc'].mean() if 'cpc' in campaign_data.columns else 0
-                st.metric(
-                    "🎯 CPC Médio",
-                    f"R$ {avg_cpc:.2f}",
-                    help="Custo médio por clique"
-                )
-            
-            # Mais métricas
-            col_metric5, col_metric6, col_metric7, col_metric8 = st.columns(4)
-            
-            with col_metric5:
-                total_revenue = campaign_data['revenue'].sum() if 'revenue' in campaign_data.columns else 0
-                st.metric(
-                    "💸 Receita Gerada",
-                    f"R$ {total_revenue:,.0f}",
-                    help="Receita total gerada"
-                )
-            
-            with col_metric6:
-                avg_ctr = campaign_data['ctr'].mean() if 'ctr' in campaign_data.columns else 0
-                st.metric(
-                    "👆 CTR Médio",
-                    f"{avg_ctr:.2f}%",
-                    help="Taxa média de cliques"
-                )
-            
-            with col_metric7:
-                total_clicks = campaign_data['clicks'].sum() if 'clicks' in campaign_data.columns else 0
-                st.metric(
-                    "🖱️ Total de Cliques",
-                    f"{total_clicks:,.0f}",
-                    help="Número total de cliques"
-                )
-            
-            with col_metric8:
-                conversion_rate = (total_conversions / total_clicks * 100) if total_clicks > 0 else 0
-                st.metric(
-                    "📊 Taxa de Conversão",
-                    f"{conversion_rate:.2f}%",
-                    help="Percentual de cliques que convertem"
-                )
-    
-    with col_main2:
-        st.markdown("### 📋 Informações da Campanha")
-        
-        # Informações básicas
-        with st.container():
-            st.markdown("#### 📅 Período Ativo")
-            if 'date' in campaign_data.columns:
-                start_date = campaign_data['date'].min()
-                end_date = campaign_data['date'].max()
-                days_active = (end_date - start_date).days
-                
-                st.write(f"**Início:** {start_date.strftime('%d/%m/%Y')}")
-                st.write(f"**Término:** {end_date.strftime('%d/%m/%Y')}")
-                st.write(f"**Dias ativa:** {days_active} dias")
-            
-            st.markdown("#### 📱 Data Sources")
-            if 'datasource' in campaign_data.columns:
-                sources = campaign_data['datasource'].unique()
-                for source in sources:
-                    st.write(f"- {source}")
-            
-            st.markdown("#### 🎯 Status da Campanha")
-            
-            # Avaliação simples baseada no ROAS
-            if avg_roas > 3:
-                st.success("✅ **Excelente Performance**")
-                st.write("ROAS acima de 3x indica campanha muito eficiente")
-            elif avg_roas > 1.5:
-                st.info("📈 **Boa Performance**")
-                st.write("ROAS entre 1.5x e 3x indica campanha rentável")
-            elif avg_roas > 1:
-                st.warning("⚠️ **Performance Regular**")
-                st.write("ROAS entre 1x e 1.5x indica campanha no break-even")
-            else:
-                st.error("❌ **Performance Insatisfatória**")
-                st.write("ROAS abaixo de 1x indica prejuízo")
-    
-    # Visualizações
-    st.markdown("---")
-    st.subheader("📊 Visualizações da Performance")
-    
-    if generate_analysis or st.session_state.campaign_analysis:
-        # Gerar visualizações
-        visualizations = create_campaign_visualizations(df_campaigns, selected_campaign)
-        
-        if visualizations:
-            # Layout das visualizações
-            for viz_name, fig in visualizations.items():
-                if viz_name == 'spend_vs_conversions':
-                    col_viz1, col_viz2 = st.columns(2)
-                    
-                    with col_viz1:
-                        st.plotly_chart(fig, use_container_width=True)
-                    
-                    with col_viz2:
-                        # Análise de tendência
-                        st.markdown("#### 📈 Análise de Tendência")
-                        
-                        if 'spend' in campaign_data.columns and 'conversions' in campaign_data.columns:
-                            # Calcular correlação
-                            correlation = campaign_data['spend'].corr(campaign_data['conversions'])
-                            
-                            if correlation > 0.7:
-                                st.success("**Correlação Forte Positiva**")
-                                st.write("Investimento e conversões estão fortemente relacionados")
-                            elif correlation > 0.3:
-                                st.info("**Correlação Moderada Positiva**")
-                                st.write("Há relação moderada entre investimento e conversões")
-                            elif correlation > -0.3:
-                                st.warning("**Correlação Fraca**")
-                                st.write("Pouca relação entre investimento e conversões")
-                            else:
-                                st.error("**Correlação Negativa**")
-                                st.write("Aumento no investimento está associado a menos conversões")
-                
-                elif viz_name == 'roas_trend':
-                    col_viz3, col_viz4 = st.columns(2)
-                    
-                    with col_viz3:
-                        st.plotly_chart(fig, use_container_width=True)
-                    
-                    with col_viz4:
-                        st.markdown("#### 💰 Análise de ROAS")
-                        
-                        roas_stats = {
-                            "Mínimo": campaign_data['roas'].min() if 'roas' in campaign_data.columns else 0,
-                            "Máximo": campaign_data['roas'].max() if 'roas' in campaign_data.columns else 0,
-                            "Média": avg_roas,
-                            "Mediana": campaign_data['roas'].median() if 'roas' in campaign_data.columns else 0
-                        }
-                        
-                        for stat_name, stat_value in roas_stats.items():
-                            st.write(f"**{stat_name}:** {stat_value:.2f}x")
-                        
-                        # Dias acima e abaixo do break-even
-                        if 'roas' in campaign_data.columns:
-                            days_above = (campaign_data['roas'] > 1).sum()
-                            days_below = (campaign_data['roas'] <= 1).sum()
-                            total_days = len(campaign_data)
-                            
-                            st.write(f"**Dias acima do break-even:** {days_above} ({days_above/total_days*100:.1f}%)")
-                            st.write(f"**Dias abaixo do break-even:** {days_below} ({days_below/total_days*100:.1f}%)")
-                
-                elif viz_name == 'efficiency_metrics':
-                    st.plotly_chart(fig, use_container_width=True)
-                
-                elif viz_name == 'correlation_heatmap':
-                    st.plotly_chart(fig, use_container_width=True)
-                
-                elif viz_name == 'source_distribution':
-                    st.plotly_chart(fig, use_container_width=True)
-    
-    # Análise com IA
-    st.markdown("---")
-    st.subheader("🤖 Análise com Inteligência Artificial")
-    
-    if generate_analysis:
-        with st.spinner("🧠 Analisando dados e gerando insights com IA..."):
-            client = get_bigquery_client()
-            analysis = generate_campaign_analysis_with_ai(
-                df_campaigns,
-                selected_campaign,
-                analysis_period,
-                metric_focus,
-                client
-            )
-            
-            st.session_state.campaign_analysis = analysis
-            
-            # Mostrar análise
-            st.markdown(analysis)
-            
-            # Botão para download
-            st.download_button(
-                label="📥 Baixar Relatório Completo",
-                data=analysis,
-                file_name=f"relatorio_campanha_{selected_campaign}_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
-                mime="text/markdown",
-                help="Baixe o relatório completo em formato Markdown"
-            )
-    
-    elif st.session_state.campaign_analysis:
-        st.markdown(st.session_state.campaign_analysis)
-        
-        # Botão para download
-        st.download_button(
-            label="📥 Baixar Relatório Completo",
-            data=st.session_state.campaign_analysis,
-            file_name=f"relatorio_campanha_{selected_campaign}_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
-            mime="text/markdown",
-            help="Baixe o relatório completo em formato Markdown"
-        )
-    
-    # Seção de recomendações rápidas
-    st.markdown("---")
-    st.subheader("💡 Recomendações Rápidas")
-    
-    col_rec1, col_rec2, col_rec3 = st.columns(3)
-    
-    with col_rec1:
-        with st.container():
-            st.markdown("#### 🚀 Para Aumentar ROAS")
-            st.write("1. Otimizar segmentação de público")
-            st.write("2. Testar diferentes criativos")
-            st.write("3. Ajustar lances por dispositivo")
-            st.write("4. Melhorar landing pages")
-    
-    with col_rec2:
-        with st.container():
-            st.markdown("#### 📉 Para Reduzir CPC")
-            st.write("1. Refinar palavras-chave")
-            st.write("2. Melhorar Quality Score")
-            st.write("3. Ajustar horários de veiculação")
-            st.write("4. Testar diferentes formatos")
-    
-    with col_rec3:
-        with st.container():
-            st.markdown("#### 📊 Para Aumentar Conversões")
-            st.write("1. Otimizar call-to-action")
-            st.write("2. Simplificar formulários")
-            st.write("3. Melhorar velocidade do site")
-            st.write("4. Implementar remarketing")
 
 # =============================================================================
 # RODAPÉ
