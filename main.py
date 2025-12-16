@@ -928,12 +928,17 @@ with tab4:
                     key="col_filtro_tab4"
                 )
                 if col_filtro != 'Nenhum':
-                    min_val = st.number_input(
-                        f"Valor mínimo de {col_filtro}",
-                        value=float(df_filtrado[col_filtro].min() if len(df_filtrado[col_filtro].dropna()) > 0 else 0),
-                        key=f"min_val_{col_filtro}_tab4"
-                    )
-                    df_filtrado = df_filtrado[df_filtrado[col_filtro] >= min_val]
+                    # Verificar se há valores válidos
+                    col_data = df_filtrado[col_filtro].dropna()
+                    if len(col_data) > 0:
+                        min_val = st.number_input(
+                            f"Valor mínimo de {col_filtro}",
+                            value=float(col_data.min()),
+                            key=f"min_val_{col_filtro}_tab4"
+                        )
+                        df_filtrado = df_filtrado[df_filtrado[col_filtro] >= min_val]
+                    else:
+                        st.info(f"Coluna '{col_filtro}' não tem valores numéricos válidos")
         
         with col_f3:
             # Limite de linhas
@@ -942,56 +947,73 @@ with tab4:
         # Mostrar dados
         st.subheader(f"📋 Dados ({len(df_filtrado):,} registros filtrados)")
         
-        # Paginação
-        total_pages = max(1, len(df_filtrado) // limite_linhas + 1)
-        
-        col_pg1, col_pg2, col_pg3 = st.columns([1, 2, 1])
-        
-        with col_pg1:
-            page_number = st.number_input("Página", 1, total_pages, 1, key="page_number_tab4", min_value=1, max_value=total_pages)
-        
-        with col_pg3:
-            st.caption(f"Total: {len(df_filtrado):,} registros")
-        
-        # Calcular índice
-        start_idx = (page_number - 1) * limite_linhas
-        end_idx = min(start_idx + limite_linhas, len(df_filtrado))
-        
-        # Formatar DataFrame para exibição
-        df_display = df_filtrado[colunas_vis].iloc[start_idx:end_idx].copy()
-        
-        # Formatar colunas numéricas
-        for col in colunas_vis:
-            if col in colunas_numericas:
-                # Formatar como número com separadores
-                def format_number(x):
-                    if pd.isna(x):
-                        return ""
-                    elif isinstance(x, (int, np.integer)):
-                        return f"{x:,}"
-                    elif isinstance(x, (float, np.floating)):
-                        return f"{x:,.2f}"
-                    return str(x)
-                
-                df_display[col] = df_display[col].apply(format_number)
-        
-        st.dataframe(
-            df_display,
-            use_container_width=True,
-            height=400
-        )
+        # Paginação - CORREÇÃO APLICADA AQUI
+        if len(df_filtrado) > 0:
+            total_pages = max(1, len(df_filtrado) // limite_linhas + 1)
+            
+            col_pg1, col_pg2, col_pg3 = st.columns([1, 2, 1])
+            
+            with col_pg1:
+                # CORREÇÃO: Verificar se total_pages é maior que 0
+                if total_pages > 0:
+                    page_number = st.number_input(
+                        "Página", 
+                        min_value=1, 
+                        max_value=total_pages, 
+                        value=1, 
+                        key="page_number_tab4"
+                    )
+                else:
+                    page_number = 1
+                    st.write("Página: 1")
+            
+            with col_pg3:
+                st.caption(f"Total: {len(df_filtrado):,} registros")
+            
+            # Calcular índice
+            start_idx = (page_number - 1) * limite_linhas
+            end_idx = min(start_idx + limite_linhas, len(df_filtrado))
+            
+            # Formatar DataFrame para exibição
+            df_display = df_filtrado[colunas_vis].iloc[start_idx:end_idx].copy()
+            
+            # Formatar colunas numéricas
+            for col in colunas_vis:
+                if col in colunas_numericas:
+                    # Formatar como número com separadores
+                    def format_number(x):
+                        if pd.isna(x):
+                            return ""
+                        elif isinstance(x, (int, np.integer)):
+                            return f"{x:,}"
+                        elif isinstance(x, (float, np.floating)):
+                            return f"{x:,.2f}"
+                        return str(x)
+                    
+                    df_display[col] = df_display[col].apply(format_number)
+            
+            st.dataframe(
+                df_display,
+                use_container_width=True,
+                height=400
+            )
+        else:
+            st.info("Nenhum dado para mostrar após aplicar filtros")
         
         # Download
         st.subheader("📥 Exportar Dados")
         
-        csv = df_filtrado[colunas_vis].to_csv(index=False)
-        st.download_button(
-            label="📥 Baixar CSV",
-            data=csv,
-            file_name=f"dados_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-            mime="text/csv",
-            key="download_csv_tab4"
-        )
+        if len(df_filtrado) > 0:
+            csv = df_filtrado[colunas_vis].to_csv(index=False)
+            st.download_button(
+                label="📥 Baixar CSV",
+                data=csv,
+                file_name=f"dados_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                mime="text/csv",
+                key="download_csv_tab4"
+            )
+        else:
+            st.warning("Nenhum dado para exportar")
 
 # =============================================================================
 # TAB 5: ANÁLISE ESTATÍSTICA AVANÇADA
