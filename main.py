@@ -1038,7 +1038,7 @@ if df.empty and df_campaigns.empty:
     st.stop()
 
 # Abas principais - AGORA COM A NOVA ABA DE PERFORMANCE
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab4, tab5, tab6 = st.tabs([
     "📋 Visão Geral das Colunas", 
     "📈 Análise Numérica", 
     "🔍 Explorar Colunas", 
@@ -1244,60 +1244,7 @@ with tab2:
 # TAB 3: EXPLORAR COLUNAS (MANTIDO IGUAL)
 # =============================================================================
 
-with tab3:
-    st.header("🔍 Explorar Colunas Individualmente")
-    
-    if df.empty:
-        st.info("ℹ️ Nenhum dado geral carregado. Carregue dados gerais na sidebar.")
-    else:
-        coluna_selecionada = st.selectbox(
-            "Selecione uma coluna para explorar",
-            options=sorted(df.columns),
-            index=0,
-            key="coluna_selecionada_tab3"
-        )
-        
-        if coluna_selecionada:
-            analise = analisar_coluna(df, coluna_selecionada)
-            
-            if analise is not None:  # VERIFICAÇÃO ADICIONADA
-                col_info1, col_info2 = st.columns(2)
-                
-                with col_info1:
-                    # CORREÇÃO: Converter para string e verificar se é numérico
-                    total_val = analise['total']
-                    if isinstance(total_val, (int, float, np.integer, np.floating)):
-                        st.metric("Total de Valores", f"{total_val:,}", key="total_valores_tab3")
-                    else:
-                        st.metric("Total de Valores", str(total_val), key="total_valores_tab3")
-                    
-                    nao_nulos_val = analise['nao_nulos']
-                    if isinstance(nao_nulos_val, (int, float, np.integer, np.floating)):
-                        st.metric("Valores Não Nulos", f"{nao_nulos_val:,}", key="nao_nulos_tab3")
-                    else:
-                        st.metric("Valores Não Nulos", str(nao_nulos_val), key="nao_nulos_tab3")
-                    
-                    valores_unicos_val = analise['valores_unicos']
-                    if isinstance(valores_unicos_val, (int, float, np.integer, np.floating)):
-                        st.metric("Valores Únicos", f"{valores_unicos_val:,}", key="valores_unicos_tab3")
-                    else:
-                        st.metric("Valores Únicos", str(valores_unicos_val), key="valores_unicos_tab3")
-                
-                with col_info2:
-                    nulos_val = analise['nulos']
-                    if isinstance(nulos_val, (int, float, np.integer, np.floating)):
-                        st.metric("Valores Nulos", f"{nulos_val:,}", key="nulos_tab3")
-                    else:
-                        st.metric("Valores Nulos", str(nulos_val), key="nulos_tab3")
-                    
-                    percentual_nulos_val = analise['percentual_nulos']
-                    if isinstance(percentual_nulos_val, (int, float, np.integer, np.floating)):
-                        st.metric("% Nulos", f"{percentual_nulos_val:.1f}%", key="percentual_nulos_tab3")
-                    else:
-                        st.metric("% Nulos", str(percentual_nulos_val) + "%", key="percentual_nulos_tab3")
-            else:
-                st.error(f"❌ Não foi possível analisar a coluna '{coluna_selecionada}'")
-                st.stop()
+
                 
 # =============================================================================
 # TAB 4: VISUALIZAR DADOS (MANTIDO IGUAL)
