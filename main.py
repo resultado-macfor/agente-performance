@@ -1041,7 +1041,6 @@ if df.empty and df_campaigns.empty:
 tab1, tab2, tab4, tab5, tab6 = st.tabs([
     "📋 Visão Geral das Colunas", 
     "📈 Análise Numérica", 
-    "🔍 Explorar Colunas", 
     "📊 Visualizar Dados",
     "📐 Análise Estatística",
     "🎯 Performance de Campanhas"  # NOVA ABA
