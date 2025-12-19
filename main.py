@@ -1,4 +1,4 @@
-# app_completo.py - App Analytics Platform Completo
+# app_completo.py - App Analytics Platform Completo CORRIGIDO
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -200,31 +200,65 @@ def generate_gemini_analysis(df_filtered, analysis_type="overall", user_instruct
         has_campaigns = 'campaign' in df_filtered.columns
         has_date = 'date' in df_filtered.columns
         
+        # Formatar datas se disponível
+        date_info = "N/A"
+        if has_date and 'date' in df_filtered.columns and not df_filtered['date'].isna().all():
+            # Garantir que a coluna date é datetime
+            try:
+                if not pd.api.types.is_datetime64_any_dtype(df_filtered['date']):
+                    df_filtered['date'] = pd.to_datetime(df_filtered['date'], errors='coerce')
+                
+                # Filtrar apenas datas válidas
+                valid_dates = df_filtered['date'].dropna()
+                if len(valid_dates) > 0:
+                    min_date = valid_dates.min()
+                    max_date = valid_dates.max()
+                    if isinstance(min_date, pd.Timestamp) and isinstance(max_date, pd.Timestamp):
+                        date_info = f"{min_date.strftime('%d/%m/%Y')} a {max_date.strftime('%d/%m/%Y')}"
+            except:
+                date_info = "N/A"
+        
         # Informações gerais
         general_info = f"""
         ## 📊 CONTEXTO GERAL:
         - **Total de registros:** {num_records:,}
-        - **Período:** {df_filtered['date'].min().strftime('%d/%m/%Y') if has_date and not df_filtered['date'].isna().all() else 'N/A'} a {df_filtered['date'].max().strftime('%d/%m/%Y') if has_date and not df_filtered['date'].isna().all() else 'N/A'}
+        - **Período:** {date_info}
         - **Colunas disponíveis:** {len(df_filtered.columns)}
         - **Campanhas:** {df_filtered['campaign'].nunique() if has_campaigns else 'N/A'}
         """
         
         # Análise de campanhas
         campaign_analysis = ""
-        if has_campaigns:
-            campaign_stats = df_filtered['campaign'].value_counts()
-            campaign_analysis = f"""
-            ## 🎯 ANÁLISE DE CAMPANHAS:
-            - **Total de campanhas:** {len(campaign_stats)}
-            - **Top 5 campanhas por volume:**
-            """
-            for i, (campaign, count) in enumerate(campaign_stats.head(5).items(), 1):
-                campaign_analysis += f"  {i}. **{campaign[:30]}...**: {count:,} registros\n"
+        if has_campaigns and 'campaign' in df_filtered.columns:
+            try:
+                campaign_stats = df_filtered['campaign'].value_counts()
+                campaign_analysis = f"""
+                ## 🎯 ANÁLISE DE CAMPANHAS:
+                - **Total de campanhas:** {len(campaign_stats)}
+                - **Top 5 campanhas por volume:**
+                """
+                for i, (campaign, count) in enumerate(campaign_stats.head(5).items(), 1):
+                    campaign_name = str(campaign)[:30] + "..." if len(str(campaign)) > 30 else str(campaign)
+                    campaign_analysis += f"  {i}. **{campaign_name}**: {count:,} registros\n"
+            except:
+                campaign_analysis = "\n## 🎯 ANÁLISE DE CAMPANHAS: (Erro na análise)\n"
         
         # Análise de métricas
-        numeric_cols = df_filtered.select_dtypes(include=[np.number]).columns.tolist()
-        metric_analysis = ""
+        numeric_cols = []
+        for col in df_filtered.columns:
+            try:
+                if pd.api.types.is_numeric_dtype(df_filtered[col]):
+                    numeric_cols.append(col)
+                else:
+                    # Tentar converter para numérico
+                    sample = df_filtered[col].dropna().head(10)
+                    if len(sample) > 0:
+                        pd.to_numeric(sample, errors='raise')
+                        numeric_cols.append(col)
+            except:
+                continue
         
+        metric_analysis = ""
         if numeric_cols:
             important_metrics = []
             priority_metrics = ['spend', 'revenue', 'conversions', 'impressions', 'clicks', 'cpc', 'cpm', 'ctr', 'roas']
@@ -241,25 +275,38 @@ def generate_gemini_analysis(df_filtered, analysis_type="overall", user_instruct
             metric_analysis = "## 📈 MÉTRICAS PRINCIPAIS:\n"
             for metric in important_metrics[:8]:
                 if metric in df_filtered.columns:
-                    metric_data = df_filtered[metric].dropna()
-                    if len(metric_data) > 0:
-                        total = metric_data.sum()
-                        avg = metric_data.mean()
-                        metric_analysis += f"\n**{metric}**:\n"
-                        metric_analysis += f"- **Total:** {total:,.2f}\n"
-                        metric_analysis += f"- **Média:** {avg:,.2f}\n"
+                    try:
+                        metric_data = pd.to_numeric(df_filtered[metric], errors='coerce').dropna()
+                        if len(metric_data) > 0:
+                            total = metric_data.sum()
+                            avg = metric_data.mean()
+                            metric_analysis += f"\n**{metric}**:\n"
+                            metric_analysis += f"- **Total:** {total:,.2f}\n"
+                            metric_analysis += f"- **Média:** {avg:,.2f}\n"
+                    except:
+                        continue
         
         # Dadosource analysis
         datasource_analysis = ""
         if 'datasource' in df_filtered.columns:
-            ds_stats = df_filtered['datasource'].value_counts()
-            datasource_analysis = "\n## 📱 DATA SOURCES:\n"
-            for ds, count in ds_stats.head().items():
-                percentage = (count / num_records) * 100
-                datasource_analysis += f"- **{ds}**: {count:,} registros ({percentage:.1f}%)\n"
+            try:
+                ds_stats = df_filtered['datasource'].value_counts()
+                datasource_analysis = "\n## 📱 DATA SOURCES:\n"
+                for ds, count in ds_stats.head().items():
+                    percentage = (count / num_records) * 100
+                    datasource_analysis += f"- **{ds}**: {count:,} registros ({percentage:.1f}%)\n"
+            except:
+                datasource_analysis = "\n## 📱 DATA SOURCES: (Erro na análise)\n"
         
-        # Sample data
-        sample_data = df_filtered.head(20).to_string()
+        # Sample data - limitar tamanho para evitar erros no prompt
+        try:
+            sample_df = df_filtered.head(20).copy()
+            # Converter colunas para string para evitar problemas de formatação
+            for col in sample_df.columns:
+                sample_df[col] = sample_df[col].astype(str)
+            sample_data = sample_df.to_string()
+        except:
+            sample_data = "Erro ao gerar amostra"
         
         # Build prompt
         if analysis_type == "overall":
@@ -322,6 +369,8 @@ def get_bigquery_client():
     """Cria cliente BigQuery"""
     try:
         # Tentar várias opções
+        service_account_info = None
+        
         if hasattr(st, 'secrets') and 'gcp_service_account' in st.secrets:
             service_account_info = dict(st.secrets["gcp_service_account"])
             if isinstance(service_account_info.get("private_key"), str):
@@ -348,6 +397,10 @@ def get_bigquery_client():
         
         else:
             st.error("❌ Credenciais não encontradas!")
+            return None
+        
+        if not service_account_info:
+            st.error("❌ Não foi possível obter as credenciais")
             return None
         
         credentials = service_account.Credentials.from_service_account_info(
@@ -397,6 +450,10 @@ def load_all_columns_data(_client, data_inicio=None, data_fim=None, data_sources
         if df.empty:
             st.warning("Nenhum dado encontrado")
             return pd.DataFrame()
+        
+        # Garantir que a coluna date é datetime
+        if 'date' in df.columns:
+            df['date'] = pd.to_datetime(df['date'], errors='coerce')
         
         st.success(f"✅ {len(df):,} registros, {len(df.columns)} colunas")
         
@@ -454,6 +511,7 @@ def identificar_colunas_numericas(df):
             if pd.api.types.is_numeric_dtype(df[col]):
                 colunas_numericas.append(col)
             else:
+                # Tentar converter para ver se é numérico
                 amostra = df[col].dropna().head(10)
                 if len(amostra) > 0:
                     try:
@@ -533,11 +591,11 @@ def analisar_coluna(df, coluna):
             
         return analise
         
-    except:
+    except Exception as e:
         return {
             'nome': coluna,
             'tipo': 'Erro',
-            'tipo_detalhado': 'Erro na análise',
+            'tipo_detalhado': f'Erro na análise: {str(e)[:50]}',
             'total': 0,
             'nao_nulos': 0,
             'nulos': 0,
@@ -557,10 +615,14 @@ def criar_visualizacao_coluna(df, coluna):
             return None
         
         if pd.api.types.is_numeric_dtype(df[coluna]):
+            # Converter para numérico se não for
+            dados_numeric = pd.to_numeric(dados, errors='coerce').dropna()
+            if len(dados_numeric) == 0:
+                return None
+            
             fig = px.histogram(
-                df, 
-                x=coluna,
-                nbins=min(50, len(dados)),
+                x=dados_numeric,
+                nbins=min(50, len(dados_numeric)),
                 title=f"Distribuição de {coluna}",
                 marginal="box"
             )
@@ -568,8 +630,11 @@ def criar_visualizacao_coluna(df, coluna):
         
         elif df[coluna].nunique() <= 50:
             contagem = df[coluna].value_counts().head(20)
+            if len(contagem) == 0:
+                return None
+            
             fig = px.bar(
-                x=contagem.index,
+                x=contagem.index.astype(str),
                 y=contagem.values,
                 title=f"Top 20 Valores em {coluna}",
                 labels={'x': coluna, 'y': 'Contagem'}
@@ -579,7 +644,12 @@ def criar_visualizacao_coluna(df, coluna):
         
         elif pd.api.types.is_datetime64_any_dtype(df[coluna]):
             try:
-                contagem_diaria = df.groupby(df[coluna].dt.date).size().reset_index()
+                # Garantir que é datetime
+                dados_dt = pd.to_datetime(dados, errors='coerce').dropna()
+                if len(dados_dt) == 0:
+                    return None
+                
+                contagem_diaria = pd.Series(dados_dt.dt.date).value_counts().sort_index().reset_index()
                 contagem_diaria.columns = ['data', 'contagem']
                 
                 fig = px.line(
@@ -593,7 +663,8 @@ def criar_visualizacao_coluna(df, coluna):
                 return None
         
         return None
-    except:
+    except Exception as e:
+        st.error(f"Erro ao criar visualização: {str(e)[:100]}")
         return None
 
 # =============================================================================
@@ -716,8 +787,11 @@ with tab1:
         safe_metric("Total de Registros", len(df))
     
     with col4:
-        memoria_mb = df.memory_usage(deep=True).sum() / 1024**2
-        safe_metric("Uso de Memória", memoria_mb)
+        try:
+            memoria_mb = df.memory_usage(deep=True).sum() / 1024**2
+            safe_metric("Uso de Memória", memoria_mb)
+        except:
+            safe_metric("Uso de Memória", "N/A")
     
     # Listar colunas
     st.subheader("📊 Detalhes de Cada Coluna")
@@ -757,35 +831,36 @@ with tab1:
     for col in sorted(colunas_para_mostrar)[:50]:
         analise = analisar_coluna(df, col)
         
-        with st.expander(f"**{col}** ({analise['tipo_detalhado'] if 'tipo_detalhado' in analise else analise['tipo']})"):
-            col_info1, col_info2 = st.columns(2)
-            
-            with col_info1:
-                safe_metric("Tipo", analise['tipo'])
-                safe_metric("Não nulos", analise['nao_nulos'])
-                safe_metric("Valores únicos", analise['valores_unicos'])
-            
-            with col_info2:
-                safe_metric("Nulos", analise['nulos'])
-                safe_metric("% Nulos", analise['percentual_nulos'])
-            
-            if analise['tipo_detalhado'] == 'Numérica' and analise['nao_nulos'] > 0:
-                st.subheader("📈 Estatísticas")
-                col_stats1, col_stats2, col_stats3, col_stats4 = st.columns(4)
+        if analise:
+            with st.expander(f"**{col}** ({analise['tipo_detalhado'] if 'tipo_detalhado' in analise else analise['tipo']})"):
+                col_info1, col_info2 = st.columns(2)
                 
-                with col_stats1:
-                    safe_metric("Média", analise.get('media', 0))
-                    safe_metric("Min", analise.get('min', 0))
+                with col_info1:
+                    safe_metric("Tipo", analise['tipo'])
+                    safe_metric("Não nulos", analise['nao_nulos'])
+                    safe_metric("Valores únicos", analise['valores_unicos'])
                 
-                with col_stats2:
-                    safe_metric("Mediana", analise.get('mediana', 0))
-                    safe_metric("Max", analise.get('max', 0))
+                with col_info2:
+                    safe_metric("Nulos", analise['nulos'])
+                    safe_metric("% Nulos", analise['percentual_nulos'])
                 
-                with col_stats3:
-                    safe_metric("Q1 (25%)", analise.get('q1', 0))
-                
-                with col_stats4:
-                    safe_metric("Q3 (75%)", analise.get('q3', 0))
+                if analise['tipo_detalhado'] == 'Numérica' and analise['nao_nulos'] > 0:
+                    st.subheader("📈 Estatísticas")
+                    col_stats1, col_stats2, col_stats3, col_stats4 = st.columns(4)
+                    
+                    with col_stats1:
+                        safe_metric("Média", analise.get('media', 0))
+                        safe_metric("Min", analise.get('min', 0))
+                    
+                    with col_stats2:
+                        safe_metric("Mediana", analise.get('mediana', 0))
+                        safe_metric("Max", analise.get('max', 0))
+                    
+                    with col_stats3:
+                        safe_metric("Q1 (25%)", analise.get('q1', 0))
+                    
+                    with col_stats4:
+                        safe_metric("Q3 (75%)", analise.get('q3', 0))
 
 # =============================================================================
 # TAB 2: ANÁLISE NUMÉRICA
@@ -810,9 +885,12 @@ with tab2:
             # Estatísticas
             st.subheader("📊 Estatísticas Descritivas")
             
-            stats_df = df[colunas_selecionadas].describe().T
-            stats_df['missing'] = df[colunas_selecionadas].isna().sum()
-            stats_df['missing_pct'] = (df[colunas_selecionadas].isna().sum() / len(df) * 100)
+            # Converter para numérico
+            df_numeric = df[colunas_selecionadas].apply(pd.to_numeric, errors='coerce')
+            
+            stats_df = df_numeric.describe().T
+            stats_df['missing'] = df_numeric.isna().sum()
+            stats_df['missing_pct'] = (df_numeric.isna().sum() / len(df) * 100)
             
             def formatar_numero(x):
                 if isinstance(x, (int, np.integer)):
@@ -830,10 +908,13 @@ with tab2:
                         return f"{x:,.0f}"
                 return str(x)
             
-            st.dataframe(
-                stats_df.style.format(formatar_numero),
-                use_container_width=True
-            )
+            try:
+                st.dataframe(
+                    stats_df.style.format(formatar_numero),
+                    use_container_width=True
+                )
+            except:
+                st.dataframe(stats_df, use_container_width=True)
             
             # Histogramas
             if len(colunas_selecionadas) > 0:
@@ -847,14 +928,16 @@ with tab2:
                         fig = criar_visualizacao_coluna(df, col)
                         if fig:
                             st.plotly_chart(fig, use_container_width=True)
+                        else:
+                            st.info(f"Não foi possível criar gráfico para {col}")
             
             # Correlações
             if len(colunas_selecionadas) >= 2:
                 st.subheader("🔥 Correlações")
                 
                 try:
-                    df_numeric = df[colunas_selecionadas].apply(pd.to_numeric, errors='coerce')
-                    correlacao = df_numeric.corr()
+                    df_numeric_corr = df_numeric.copy()
+                    correlacao = df_numeric_corr.corr()
                     
                     fig_corr = px.imshow(
                         correlacao,
@@ -889,7 +972,7 @@ with tab2:
                         st.info("Sem correlações fortes (> 0.3)")
                         
                 except Exception as e:
-                    st.error(f"Erro: {str(e)[:100]}")
+                    st.error(f"Erro ao calcular correlações: {str(e)[:100]}")
 
 # =============================================================================
 # TAB 3: EXPLORAR COLUNAS
@@ -925,6 +1008,8 @@ with tab3:
             fig = criar_visualizacao_coluna(df, coluna_selecionada)
             if fig:
                 st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info(f"Não foi possível criar visualização para esta coluna")
             
             # Valores
             st.subheader("📋 Amostra de Valores")
@@ -933,27 +1018,40 @@ with tab3:
             
             with col_amostra1:
                 st.write("**Primeiros 10:**")
-                st.write(df[coluna_selecionada].head(10).tolist())
+                try:
+                    primeiros = df[coluna_selecionada].head(10).tolist()
+                    primeiros_str = [str(x) for x in primeiros]
+                    st.write(primeiros_str)
+                except:
+                    st.write("Erro ao mostrar valores")
             
             with col_amostra2:
                 st.write("**Últimos 10:**")
-                st.write(df[coluna_selecionada].tail(10).tolist())
+                try:
+                    ultimos = df[coluna_selecionada].tail(10).tolist()
+                    ultimos_str = [str(x) for x in ultimos]
+                    st.write(ultimos_str)
+                except:
+                    st.write("Erro ao mostrar valores")
             
             # Distribuição
             if analise['tipo_detalhado'] == 'Texto/Categórica' and analise['valores_unicos'] <= 100:
                 st.subheader("📊 Distribuição")
                 
-                contagem = df[coluna_selecionada].value_counts()
-                df_contagem = pd.DataFrame({
-                    'Valor': contagem.index,
-                    'Contagem': contagem.values,
-                    'Percentual': (contagem.values / len(df) * 100)
-                })
-                
-                st.dataframe(
-                    df_contagem.style.format({'Contagem': '{:,}', 'Percentual': '{:.1f}%'}),
-                    use_container_width=True
-                )
+                try:
+                    contagem = df[coluna_selecionada].value_counts()
+                    df_contagem = pd.DataFrame({
+                        'Valor': contagem.index.astype(str),
+                        'Contagem': contagem.values,
+                        'Percentual': (contagem.values / len(df) * 100)
+                    })
+                    
+                    st.dataframe(
+                        df_contagem.style.format({'Contagem': '{:,}', 'Percentual': '{:.1f}%'}),
+                        use_container_width=True
+                    )
+                except:
+                    st.error("Erro ao calcular distribuição")
 
 # =============================================================================
 # TAB 4: VISUALIZAR DADOS
@@ -999,14 +1097,17 @@ with tab4:
                     key="col_filtro_tab4"
                 )
                 if col_filtro != 'Nenhum':
-                    col_data = df_filtrado[col_filtro].dropna()
-                    if len(col_data) > 0:
-                        min_val = st.number_input(
-                            f"Valor mínimo de {col_filtro}",
-                            value=float(col_data.min()),
-                            key=f"min_val_{col_filtro}_tab4"
-                        )
-                        df_filtrado = df_filtrado[df_filtrado[col_filtro] >= min_val]
+                    try:
+                        col_data = pd.to_numeric(df_filtrado[col_filtro], errors='coerce').dropna()
+                        if len(col_data) > 0:
+                            min_val = st.number_input(
+                                f"Valor mínimo de {col_filtro}",
+                                value=float(col_data.min()),
+                                key=f"min_val_{col_filtro}_tab4"
+                            )
+                            df_filtrado = df_filtrado[pd.to_numeric(df_filtrado[col_filtro], errors='coerce') >= min_val]
+                    except:
+                        st.warning(f"Não foi possível filtrar por {col_filtro}")
         
         with col_f3:
             limite_linhas = st.slider("Linhas para mostrar", 10, 1000, 100, key="limite_linhas_tab4")
@@ -1042,19 +1143,20 @@ with tab4:
             # Formatar DataFrame
             df_display = df_filtrado[colunas_vis].iloc[start_idx:end_idx].copy()
             
-            # Formatar números
+            # Formatar números e datas
             for col in colunas_vis:
                 if col in colunas_numericas:
-                    def format_number(x):
-                        if pd.isna(x):
-                            return ""
-                        elif isinstance(x, (int, np.integer)):
-                            return f"{x:,}"
-                        elif isinstance(x, (float, np.floating)):
-                            return f"{x:,.2f}"
-                        return str(x)
-                    
-                    df_display[col] = df_display[col].apply(format_number)
+                    try:
+                        df_display[col] = df_display[col].apply(
+                            lambda x: f"{x:,.2f}" if isinstance(x, (int, float)) and not pd.isna(x) else ""
+                        )
+                    except:
+                        pass
+                elif pd.api.types.is_datetime64_any_dtype(df[col]):
+                    try:
+                        df_display[col] = df_display[col].dt.strftime('%Y-%m-%d')
+                    except:
+                        pass
             
             st.dataframe(
                 df_display,
@@ -1095,37 +1197,60 @@ with tab5:
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            num_campaigns = df['campaign'].nunique()
-            safe_metric("Campanhas", num_campaigns)
+            try:
+                num_campaigns = df['campaign'].nunique()
+                safe_metric("Campanhas", num_campaigns)
+            except:
+                safe_metric("Campanhas", "Erro")
         
         with col2:
             if 'date' in df.columns:
-                days = (df['date'].max() - df['date'].min()).days + 1
-                safe_metric("Dias", days)
+                try:
+                    # Garantir que é datetime
+                    df_date = df['date'].dropna()
+                    if len(df_date) > 0:
+                        if not pd.api.types.is_datetime64_any_dtype(df_date):
+                            df_date = pd.to_datetime(df_date, errors='coerce')
+                        days = (df_date.max() - df_date.min()).days + 1
+                        safe_metric("Dias", days)
+                    else:
+                        safe_metric("Dias", 0)
+                except:
+                    safe_metric("Dias", "Erro")
         
         with col3:
             if 'datasource' in df.columns:
-                sources = df['datasource'].nunique()
-                safe_metric("Data Sources", sources)
+                try:
+                    sources = df['datasource'].nunique()
+                    safe_metric("Data Sources", sources)
+                except:
+                    safe_metric("Data Sources", "Erro")
         
         with col4:
-            records_per_campaign = len(df) / num_campaigns if num_campaigns > 0 else 0
-            safe_metric("Média Reg/Camp", f"{records_per_campaign:.1f}")
+            try:
+                num_campaigns_val = df['campaign'].nunique()
+                records_per_campaign = len(df) / num_campaigns_val if num_campaigns_val > 0 else 0
+                safe_metric("Média Reg/Camp", f"{records_per_campaign:.1f}")
+            except:
+                safe_metric("Média Reg/Camp", "Erro")
         
         # Análise por campanha
         st.subheader("📈 Top Campanhas")
         
         if 'campaign' in df.columns:
-            campaign_stats = df['campaign'].value_counts().head(10)
-            
-            fig = px.bar(
-                x=campaign_stats.index,
-                y=campaign_stats.values,
-                title="Top 10 Campanhas por Volume",
-                labels={'x': 'Campanha', 'y': 'Registros'}
-            )
-            fig.update_xaxes(tickangle=45)
-            st.plotly_chart(fig, use_container_width=True)
+            try:
+                campaign_stats = df['campaign'].value_counts().head(10)
+                
+                fig = px.bar(
+                    x=campaign_stats.index.astype(str),
+                    y=campaign_stats.values,
+                    title="Top 10 Campanhas por Volume",
+                    labels={'x': 'Campanha', 'y': 'Registros'}
+                )
+                fig.update_xaxes(tickangle=45)
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.error(f"Erro ao criar gráfico: {str(e)[:100]}")
         
         # Métricas financeiras
         st.subheader("💰 Métricas Financeiras")
@@ -1142,11 +1267,14 @@ with tab5:
             for idx, metric in enumerate(financial_metrics[:4]):
                 with cols[idx]:
                     if metric in df.columns:
-                        total = df[metric].sum()
-                        safe_metric(metric, total)
+                        try:
+                            total = pd.to_numeric(df[metric], errors='coerce').sum()
+                            safe_metric(metric, total)
+                        except:
+                            safe_metric(metric, "Erro")
 
 # =============================================================================
-# TAB 6: ANÁLISE COM IA
+# TAB 6: ANÁLISE COM IA - CORRIGIDO
 # =============================================================================
 
 with tab6:
@@ -1154,6 +1282,7 @@ with tab6:
     
     if not modelo_texto:
         st.error("❌ Gemini não configurado!")
+        st.info("Configure a chave do Gemini nas variáveis de ambiente ou secrets.")
         st.stop()
     
     if df.empty:
@@ -1172,20 +1301,34 @@ with tab6:
                 selected_ds = st.multiselect(
                     "Data Sources:",
                     options=datasources,
-                    default=datasources
+                    default=datasources[:min(3, len(datasources))]
                 )
             else:
                 selected_ds = None
             
             if 'date' in df.columns:
-                min_date = df['date'].min()
-                max_date = df['date'].max()
-                date_range = st.date_input(
-                    "Período:",
-                    value=(min_date, max_date),
-                    min_value=min_date,
-                    max_value=max_date
-                )
+                try:
+                    # Garantir que a coluna date é datetime
+                    date_series = df['date'].dropna()
+                    if len(date_series) > 0:
+                        if not pd.api.types.is_datetime64_any_dtype(date_series):
+                            date_series = pd.to_datetime(date_series, errors='coerce')
+                        
+                        min_date = date_series.min().date()
+                        max_date = date_series.max().date()
+                        
+                        date_range = st.date_input(
+                            "Período:",
+                            value=(min_date, max_date),
+                            min_value=min_date,
+                            max_value=max_date
+                        )
+                    else:
+                        st.info("Sem datas disponíveis")
+                        date_range = None
+                except Exception as e:
+                    st.error(f"Erro com datas: {str(e)[:100]}")
+                    date_range = None
             else:
                 date_range = None
         
@@ -1207,22 +1350,40 @@ with tab6:
                 step=100
             )
     
-    # Aplicar filtros
+    # Aplicar filtros - CORREÇÃO DO ERRO PRINCIPAL
     df_filtered = df.copy()
     
-    if selected_ds and 'datasource' in df_filtered.columns:
+    # Filtro por datasource
+    if selected_ds and 'datasource' in df_filtered.columns and len(selected_ds) > 0:
         df_filtered = df_filtered[df_filtered['datasource'].isin(selected_ds)]
     
+    # Filtro por data - CORREÇÃO AQUI
     if date_range and len(date_range) == 2 and 'date' in df_filtered.columns:
         start_date, end_date = date_range
+        
+        # Garantir que a coluna date é datetime
+        if not pd.api.types.is_datetime64_any_dtype(df_filtered['date']):
+            df_filtered['date'] = pd.to_datetime(df_filtered['date'], errors='coerce')
+        
+        # Filtrar apenas datas válidas
+        mask = df_filtered['date'].notna()
+        
+        # Converter start_date e end_date para datetime
+        start_dt = pd.Timestamp(start_date)
+        end_dt = pd.Timestamp(end_date)
+        
+        # Aplicar filtro de data
         df_filtered = df_filtered[
-            (df_filtered['date'].dt.date >= start_date) & 
-            (df_filtered['date'].dt.date <= end_date)
+            mask & 
+            (df_filtered['date'] >= start_dt) & 
+            (df_filtered['date'] <= end_dt)
         ]
     
-    if selected_campaigns and 'campaign' in df_filtered.columns:
+    # Filtro por campanha
+    if selected_campaigns and 'campaign' in df_filtered.columns and len(selected_campaigns) > 0:
         df_filtered = df_filtered[df_filtered['campaign'].isin(selected_campaigns)]
     
+    # Limitar registros
     df_filtered = df_filtered.head(max_records)
     
     # Estatísticas
@@ -1235,18 +1396,34 @@ with tab6:
     
     with col_stat2:
         if 'campaign' in df_filtered.columns:
-            num_campaigns = df_filtered['campaign'].nunique()
-            safe_metric("Campanhas", num_campaigns)
+            try:
+                num_campaigns = df_filtered['campaign'].nunique()
+                safe_metric("Campanhas", num_campaigns)
+            except:
+                safe_metric("Campanhas", "Erro")
     
     with col_stat3:
         if 'datasource' in df_filtered.columns:
-            num_sources = df_filtered['datasource'].nunique()
-            safe_metric("Data Sources", num_sources)
+            try:
+                num_sources = df_filtered['datasource'].nunique()
+                safe_metric("Data Sources", num_sources)
+            except:
+                safe_metric("Data Sources", "Erro")
     
     with col_stat4:
         if 'date' in df_filtered.columns:
-            period_days = (df_filtered['date'].max() - df_filtered['date'].min()).days + 1
-            safe_metric("Dias", period_days)
+            try:
+                # Garantir que é datetime
+                date_series = df_filtered['date'].dropna()
+                if len(date_series) > 0:
+                    if not pd.api.types.is_datetime64_any_dtype(date_series):
+                        date_series = pd.to_datetime(date_series, errors='coerce')
+                    period_days = (date_series.max() - date_series.min()).days + 1
+                    safe_metric("Dias", period_days)
+                else:
+                    safe_metric("Dias", 0)
+            except:
+                safe_metric("Dias", "Erro")
     
     # Configuração
     st.markdown("### 🎯 Configuração")
@@ -1264,13 +1441,16 @@ with tab6:
     
     user_instructions = st.text_area(
         "📝 Instruções (opcional):",
-        placeholder="Ex: Foque no ROI, identifique as melhores campanhas..."
+        placeholder="Ex: Foque no ROI, identifique as melhores campanhas, analise tendências por data source...",
+        height=100
     )
     
     # Gerar análise
     st.markdown("### 🚀 Gerar Análise")
     
-    if st.button("🤖 Gerar Análise com Gemini", type="primary", use_container_width=True):
+    generate_button = st.button("🤖 Gerar Análise com Gemini", type="primary", use_container_width=True)
+    
+    if generate_button:
         if df_filtered.empty:
             st.error("❌ Nenhum dado após filtros.")
         else:
@@ -1282,8 +1462,9 @@ with tab6:
                         user_instructions
                     )
                     st.session_state.gemini_analysis = analysis_result
+                    st.success("✅ Análise concluída!")
                 except Exception as e:
-                    st.error(f"❌ Erro: {str(e)[:200]}")
+                    st.error(f"❌ Erro ao gerar análise: {str(e)[:200]}")
     
     # Mostrar análise
     if st.session_state.gemini_analysis:
@@ -1346,8 +1527,11 @@ with footer_col1:
 
 with footer_col2:
     if 'campaign' in df.columns:
-        num_campaigns = df['campaign'].nunique()
-        st.caption(f"🎯 Campanhas: {num_campaigns}")
+        try:
+            num_campaigns = df['campaign'].nunique()
+            st.caption(f"🎯 Campanhas: {num_campaigns}")
+        except:
+            st.caption("🎯 Campanhas: Erro")
 
 with footer_col3:
     st.caption(f"⏰ {datetime.now().strftime('%d/%m/%Y %H:%M')}")
