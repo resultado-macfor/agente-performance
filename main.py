@@ -528,6 +528,9 @@ def safe_metric(label, value, delta=None):
 
 def identificar_colunas_numericas(df):
     """Identifica colunas numéricas"""
+    if df.empty:
+        return []
+    
     colunas_numericas = []
     
     for col in df.columns:
@@ -550,7 +553,7 @@ def identificar_colunas_numericas(df):
 
 def analisar_coluna(df, coluna):
     """Analisa uma coluna específica"""
-    if coluna not in df.columns:
+    if df.empty or coluna not in df.columns:
         return None
     
     try:
@@ -629,7 +632,7 @@ def analisar_coluna(df, coluna):
 
 def criar_visualizacao_coluna(df, coluna):
     """Cria visualização para coluna"""
-    if coluna not in df.columns:
+    if df.empty or coluna not in df.columns:
         return None
     
     try:
@@ -859,7 +862,7 @@ def extrair_categorias_campanha(nome_campanha):
 
 def classificar_campanhas_multi_cliente(df, coluna_campanha='campaign'):
     """Classifica campanhas para múltiplos clientes"""
-    if coluna_campanha not in df.columns:
+    if df.empty or coluna_campanha not in df.columns:
         return df
     
     classificacoes = []
@@ -1001,8 +1004,20 @@ with st.sidebar:
         with col2:
             data_fim = st.date_input("Fim", value=data_fim)
     
-    # Limite
-    limite = st.slider("Limite de registros", 1000, 100000, 20000, 1000)
+    # Limite - CORREÇÃO DO ERRO: usar valor padrão se df vazio
+    limite_default = 20000
+    if st.session_state.df_completo.empty:
+        max_limit = 100000
+    else:
+        max_limit = min(100000, max(limite_default, len(st.session_state.df_completo)))
+    
+    limite = st.slider(
+        "Limite de registros", 
+        1000, 
+        max_limit, 
+        min(limite_default, max_limit), 
+        1000
+    )
     
     # Botão carregar
     if st.button("📊 Carregar Dados", use_container_width=True, type="primary"):
@@ -1028,6 +1043,7 @@ with st.sidebar:
                     st.success(f"✅ {len(df):,} registros carregados e classificados")
                     st.session_state.gemini_analysis = None
                     st.session_state.filtros_aplicados = {}
+                    st.rerun()
                 else:
                     st.error("Nenhum dado encontrado")
             else:
@@ -1038,8 +1054,12 @@ df = st.session_state.df_completo
 colunas_numericas = st.session_state.colunas_numericas
 df_classificado = st.session_state.df_classificado
 
+# =============================================================================
+# SEÇÃO PRINCIPAL (mostrar apenas se houver dados)
+# =============================================================================
+
 if df.empty:
-    st.warning("📭 Nenhum dado carregado. Use o botão na sidebar.")
+    st.warning("📭 Nenhum dado carregado. Use o botão na sidebar para carregar dados.")
     st.stop()
 
 # =============================================================================
@@ -1061,6 +1081,8 @@ with filtro_col1:
         )
         if cliente_selecionado != 'Todos':
             st.session_state.filtros_aplicados['campaign_cliente'] = cliente_selecionado
+        elif 'campaign_cliente' in st.session_state.filtros_aplicados:
+            del st.session_state.filtros_aplicados['campaign_cliente']
     
     # Filtro por Iniciativa
     if 'campaign_iniciativa' in df_classificado.columns:
@@ -1071,6 +1093,8 @@ with filtro_col1:
         )
         if iniciativa_selecionada != 'Todas':
             st.session_state.filtros_aplicados['campaign_iniciativa'] = iniciativa_selecionada
+        elif 'campaign_iniciativa' in st.session_state.filtros_aplicados:
+            del st.session_state.filtros_aplicados['campaign_iniciativa']
 
 with filtro_col2:
     # Filtro por Produto
@@ -1082,6 +1106,8 @@ with filtro_col2:
         )
         if produto_selecionado != 'Todos':
             st.session_state.filtros_aplicados['campaign_produto'] = produto_selecionado
+        elif 'campaign_produto' in st.session_state.filtros_aplicados:
+            del st.session_state.filtros_aplicados['campaign_produto']
     
     # Filtro por Cultura
     if 'campaign_cultura' in df_classificado.columns:
@@ -1092,6 +1118,8 @@ with filtro_col2:
         )
         if cultura_selecionada != 'Todas':
             st.session_state.filtros_aplicados['campaign_cultura'] = cultura_selecionada
+        elif 'campaign_cultura' in st.session_state.filtros_aplicados:
+            del st.session_state.filtros_aplicados['campaign_cultura']
 
 with filtro_col3:
     # Filtro por Tipo de Campanha
@@ -1103,6 +1131,8 @@ with filtro_col3:
         )
         if tipo_selecionado != 'Todos':
             st.session_state.filtros_aplicados['campaign_tipo_campanha'] = tipo_selecionado
+        elif 'campaign_tipo_campanha' in st.session_state.filtros_aplicados:
+            del st.session_state.filtros_aplicados['campaign_tipo_campanha']
     
     # Filtro por Objetivo
     if 'campaign_objetivo' in df_classificado.columns:
@@ -1113,6 +1143,8 @@ with filtro_col3:
         )
         if objetivo_selecionado != 'Todos':
             st.session_state.filtros_aplicados['campaign_objetivo'] = objetivo_selecionado
+        elif 'campaign_objetivo' in st.session_state.filtros_aplicados:
+            del st.session_state.filtros_aplicados['campaign_objetivo']
 
 # Filtros adicionais em uma nova linha
 filtro_col4, filtro_col5, filtro_col6 = st.columns(3)
@@ -1127,6 +1159,8 @@ with filtro_col4:
         )
         if etapa_selecionada != 'Todas':
             st.session_state.filtros_aplicados['campaign_etapa_funil'] = etapa_selecionada
+        elif 'campaign_etapa_funil' in st.session_state.filtros_aplicados:
+            del st.session_state.filtros_aplicados['campaign_etapa_funil']
 
 with filtro_col5:
     # Filtro por Plataforma
@@ -1138,6 +1172,8 @@ with filtro_col5:
         )
         if plataforma_selecionada != 'Todas':
             st.session_state.filtros_aplicados['campaign_plataforma'] = plataforma_selecionada
+        elif 'campaign_plataforma' in st.session_state.filtros_aplicados:
+            del st.session_state.filtros_aplicados['campaign_plataforma']
 
 with filtro_col6:
     # Filtro por Agência
@@ -1149,6 +1185,8 @@ with filtro_col6:
         )
         if agencia_selecionada != 'Todas':
             st.session_state.filtros_aplicados['campaign_agencia'] = agencia_selecionada
+        elif 'campaign_agencia' in st.session_state.filtros_aplicados:
+            del st.session_state.filtros_aplicados['campaign_agencia']
 
 # Botões de ação para filtros
 col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 2])
@@ -1210,7 +1248,7 @@ with tab1:
     with col4:
         try:
             memoria_mb = df_filtrado.memory_usage(deep=True).sum() / 1024**2
-            safe_metric("Uso de Memória", memoria_mb)
+            safe_metric("Uso de Memória", f"{memoria_mb:.2f} MB")
         except:
             safe_metric("Uso de Memória", "N/A")
     
@@ -1263,7 +1301,7 @@ with tab1:
                 
                 with col_info2:
                     safe_metric("Nulos", analise['nulos'])
-                    safe_metric("% Nulos", analise['percentual_nulos'])
+                    safe_metric("% Nulos", f"{analise['percentual_nulos']:.1f}%")
                 
                 if analise['tipo_detalhado'] == 'Numérica' and analise['nao_nulos'] > 0:
                     st.subheader("📈 Estatísticas")
@@ -1424,7 +1462,7 @@ with tab3:
             
             with col_info2:
                 safe_metric("Valores Nulos", analise['nulos'])
-                safe_metric("% Nulos", analise['percentual_nulos'])
+                safe_metric("% Nulos", f"{analise['percentual_nulos']:.1f}%")
             
             # Visualização
             st.subheader("📊 Visualização")
@@ -1444,7 +1482,8 @@ with tab3:
                 try:
                     primeiros = df_filtrado[coluna_selecionada].head(10).tolist()
                     primeiros_str = [str(x) for x in primeiros]
-                    st.write(primeiros_str)
+                    for val in primeiros_str:
+                        st.write(f"- {val}")
                 except:
                     st.write("Erro ao mostrar valores")
             
@@ -1453,7 +1492,8 @@ with tab3:
                 try:
                     ultimos = df_filtrado[coluna_selecionada].tail(10).tolist()
                     ultimos_str = [str(x) for x in ultimos]
-                    st.write(ultimos_str)
+                    for val in ultimos_str:
+                        st.write(f"- {val}")
                 except:
                     st.write("Erro ao mostrar valores")
             
@@ -1760,7 +1800,8 @@ with tab6:
                 selected_ds = st.multiselect(
                     "Data Sources:",
                     options=datasources,
-                    default=datasources[:min(3, len(datasources))]
+                    default=datasources[:min(3, len(datasources))],
+                    key="selected_ds_tab6"
                 )
             else:
                 selected_ds = None
@@ -1780,7 +1821,8 @@ with tab6:
                             "Período:",
                             value=(min_date, max_date),
                             min_value=min_date,
-                            max_value=max_date
+                            max_value=max_date,
+                            key="date_range_tab6"
                         )
                     else:
                         st.info("Sem datas disponíveis")
@@ -1796,17 +1838,22 @@ with tab6:
                 campaigns = sorted(df_filtrado['campaign'].dropna().unique())
                 selected_campaigns = st.multiselect(
                     "Campanhas (opcional):",
-                    options=campaigns
+                    options=campaigns,
+                    key="selected_campaigns_tab6"
                 )
             else:
                 selected_campaigns = None
             
+            # CORREÇÃO DO ERRO: usar valor seguro para o slider
+            df_len = len(df_filtrado)
+            max_records_value = min(10000, max(100, df_len)) if df_len > 0 else 5000
             max_records = st.slider(
                 "Máximo de registros:",
                 min_value=100,
-                max_value=min(10000, len(df_filtrado)),
-                value=min(5000, len(df_filtrado)),
-                step=100
+                max_value=min(10000, df_len) if df_len > 0 else 10000,
+                value=min(5000, max_records_value),
+                step=100,
+                key="max_records_tab6"
             )
     
     # Aplicar filtros adicionais
@@ -1895,19 +1942,21 @@ with tab6:
             "trends": "📊 Tendências", 
             "efficiency": "💰 Eficiência",
             "complete": "🏆 Análise Completa"
-        }[x]
+        }[x],
+        key="analysis_focus_tab6"
     )
     
     user_instructions = st.text_area(
         "📝 Instruções (opcional):",
         placeholder="Ex: Foque no ROI, identifique as melhores campanhas, analise tendências por data source...",
-        height=100
+        height=100,
+        key="user_instructions_tab6"
     )
     
     # Gerar análise
     st.markdown("### 🚀 Gerar Análise")
     
-    generate_button = st.button("🤖 Gerar Análise com Gemini", type="primary", use_container_width=True)
+    generate_button = st.button("🤖 Gerar Análise com Gemini", type="primary", use_container_width=True, key="generate_button_tab6")
     
     if generate_button:
         if df_filtered_ia.empty:
@@ -1940,11 +1989,12 @@ with tab6:
                 data=analysis_text,
                 file_name=f"analise_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
                 mime="text/plain",
-                use_container_width=True
+                use_container_width=True,
+                key="download_report_tab6"
             )
         
         with col_actions2:
-            if st.button("🔄 Nova Análise", use_container_width=True):
+            if st.button("🔄 Nova Análise", use_container_width=True, key="new_analysis_tab6"):
                 st.session_state.gemini_analysis = None
                 st.rerun()
         
@@ -2083,7 +2133,8 @@ with tab7:
             campanhas = sorted(df_classificado['campaign'].dropna().unique())
             campanha_selecionada = st.selectbox(
                 "Selecione uma campanha para análise:",
-                options=campanhas[:100]  # Limitar para performance
+                options=campanhas[:100],  # Limitar para performance
+                key="campanha_selecionada_tab7"
             )
             
             if campanha_selecionada:
@@ -2125,7 +2176,7 @@ with tab7:
             st.plotly_chart(fig_status, use_container_width=True)
         
         # Botão para reclassificar
-        if st.button("🔄 Reclassificar Campanhas", use_container_width=True):
+        if st.button("🔄 Reclassificar Campanhas", use_container_width=True, key="reclassificar_tab7"):
             with st.spinner("Reclassificando campanhas..."):
                 df_classificado_novo = classificar_campanhas_multi_cliente(df)
                 st.session_state.df_classificado = df_classificado_novo
@@ -2150,7 +2201,8 @@ with tab7:
                 data=csv_data,
                 file_name=f"campanhas_classificadas_completo_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                 mime="text/csv",
-                use_container_width=True
+                use_container_width=True,
+                key="download_all_tab7"
             )
         
         with col_export2:
@@ -2164,14 +2216,15 @@ with tab7:
                         data=csv_nao_classificadas,
                         file_name=f"campanhas_nao_classificadas_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                         mime="text/csv",
-                        use_container_width=True
+                        use_container_width=True,
+                        key="download_unclassified_tab7"
                     )
     
     # Análise com Gemini sobre padrões
     if modelo_texto and len(df_classificado) > 0:
         st.markdown("### 🤖 Análise de Padrões com Gemini")
         
-        if st.button("🔍 Analisar Padrões de Nomenclatura", use_container_width=True):
+        if st.button("🔍 Analisar Padrões de Nomenclatura", use_container_width=True, key="analisar_padroes_tab7"):
             with st.spinner("Analisando padrões de nomenclatura..."):
                 try:
                     # Preparar amostra de campanhas
