@@ -1,4 +1,4 @@
-# app_completo.py - App Analytics Platform Completo CORRIGIDO
+# app_completo.py - App Analytics Platform Completo com Classificador Multi-Clientes
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -11,6 +11,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import plotly.figure_factory as ff
 import io
+import re
 
 # Tentar importar Gemini
 try:
@@ -23,7 +24,7 @@ except ImportError:
 # Configuração da página
 st.set_page_config(
     layout="wide",
-    page_title="Analytics Platform",
+    page_title="Analytics Platform + Classificador de Campanhas",
     page_icon="📊"
 )
 
@@ -137,11 +138,34 @@ st.markdown("""
         margin: 10px 0;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
+    .campaign-classifier {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 25px;
+        margin: 20px 0;
+        box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+    }
+    .classifier-result {
+        background: #d1fae5;
+        border-radius: 10px;
+        padding: 20px;
+        margin: 15px 0;
+        border-left: 5px solid #059669;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    .client-filter {
+        background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 15px;
+        margin: 10px 0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # Título
-st.markdown('<div class="header-gradient"><h1>📊 Analytics Platform - Análise Completa de Dados</h1></div>', unsafe_allow_html=True)
+st.markdown('<div class="header-gradient"><h1>📊 Analytics Platform + Classificador de Campanhas Multi-Clientes</h1></div>', unsafe_allow_html=True)
 
 # =============================================================================
 # CONFIGURAÇÃO GEMINI
@@ -668,6 +692,253 @@ def criar_visualizacao_coluna(df, coluna):
         return None
 
 # =============================================================================
+# FUNÇÕES PARA CLASSIFICADOR DE CAMPANHAS MULTI-CLIENTES
+# =============================================================================
+
+def extrair_categorias_campanha(nome_campanha):
+    """Extrai categorias de campanha usando regex e análise de padrões"""
+    if not nome_campanha or pd.isna(nome_campanha):
+        return {}
+    
+    nome_str = str(nome_campanha).upper()
+    
+    # Inicializar dicionário de resultados
+    categorias = {
+        'iniciativa': None,
+        'produto': None,
+        'cultura': None,
+        'categoria': None,
+        'tipo_campanha': None,
+        'objetivo': None,
+        'etapa_funil': None,
+        'editoria': None,
+        'po': None,
+        'agencia': None,
+        'plataforma': None,
+        'cliente': None
+    }
+    
+    # Padrões comuns para identificar componentes
+    padroes = {
+        # Etapas do funil (em várias línguas)
+        'etapa_funil': [
+            'UP', 'MID', 'LOWER', 'TOF', 'MOF', 'BOF', 'TOP', 'MIDDLE', 'BOTTOM',
+            'AWARENESS', 'CONSIDERATION', 'CONVERSION', 'RETENTION',
+            'DESCOBERTA', 'CONSIDERACAO', 'CONVERSAO', 'RETENCAO'
+        ],
+        
+        # Tipos de campanha
+        'tipo_campanha': [
+            'VIDEO', 'DISPLAY', 'SEARCH', 'SOCIAL', 'EMAIL', 'SMS', 'PUSH',
+            'NATIVO', 'NATIVE', 'PROGRAMATICA', 'PROGRAMMATIC',
+            'PERFORMANCE', 'BRANDING', 'BRAND', 'DIRECT', 'DIRECT_RESPONSE'
+        ],
+        
+        # Objetivos
+        'objetivo': [
+            'AWARENESS', 'CONSIDERATION', 'CONVERSION', 'LEAD', 'SALES',
+            'TRAFFIC', 'ENGAGEMENT', 'INSTALL', 'VIEWS', 'CLICKS',
+            'ALCANCE', 'CONVERSAO', 'LEADS', 'VENDAS', 'TRAFEGO',
+            'ENGAJAMENTO', 'INSTALACOES', 'VISUALIZACOES', 'CLIQUES'
+        ],
+        
+        # Plataformas
+        'plataforma': [
+            'GOOGLE', 'FACEBOOK', 'INSTAGRAM', 'TIKTOK', 'LINKEDIN', 'TWITTER',
+            'YOUTUBE', 'PINTEREST', 'SNAPCHAT', 'META', 'TIKTOK', 'BING',
+            'DV360', 'TRADEDESK', 'AMAZON', 'APPLE', 'SPOTIFY'
+        ],
+        
+        # Agências (adicionar mais conforme necessário)
+        'agencia': [
+            'MACFOR', 'OGILVY', 'PUBLICIS', 'WPP', 'OMNICOM', 'DENTSU',
+            'HAVAS', 'IPG', 'ACCENTURE', 'DELOITTE', 'PWC', 'KPMG'
+        ],
+        
+        # Culturas/produtos agrícolas
+        'cultura': [
+            'SOJA', 'MILHO', 'CAFE', 'ALGODAO', 'CANADEACUCAR', 'CANA',
+            'TRIGO', 'ARROZ', 'FEIJAO', 'MANDIOCA', 'LARANJA', 'UVA',
+            'TOMATE', 'BATATA', 'CEVADA', 'AVEIA', 'GIRASSOL'
+        ],
+        
+        # Marcas/Produtos genéricos
+        'produto': [
+            'PRODUTO_A', 'PRODUTO_B', 'PRODUTO_C', 'LINE_A', 'LINE_B',
+            'BRAND_X', 'BRAND_Y', 'SERVICO_1', 'SERVICO_2'
+        ]
+    }
+    
+    # Identificar PO (Purchase Order)
+    po_pattern = r'\bPO[_-]?(\d+)\b'
+    po_match = re.search(po_pattern, nome_str, re.IGNORECASE)
+    if po_match:
+        categorias['po'] = f"PO{po_match.group(1)}"
+    
+    # Identificar agência
+    for agencia in padroes['agencia']:
+        if agencia in nome_str:
+            categorias['agencia'] = agencia
+            break
+    
+    # Identificar plataforma
+    for plataforma in padroes['plataforma']:
+        if plataforma in nome_str:
+            categorias['plataforma'] = plataforma
+            break
+    
+    # Identificar cultura
+    for cultura in padroes['cultura']:
+        if cultura in nome_str:
+            categorias['cultura'] = cultura
+            break
+    
+    # Identificar produto
+    for produto in padroes['produto']:
+        if produto in nome_str:
+            categorias['produto'] = produto
+            break
+    
+    # Identificar tipo de campanha
+    for tipo in padroes['tipo_campanha']:
+        if tipo in nome_str:
+            categorias['tipo_campanha'] = tipo
+            break
+    
+    # Identificar objetivo
+    for objetivo in padroes['objetivo']:
+        if objetivo in nome_str:
+            categorias['objetivo'] = objetivo
+            break
+    
+    # Identificar etapa do funil
+    for etapa in padroes['etapa_funil']:
+        if etapa in nome_str:
+            categorias['etapa_funil'] = etapa
+            break
+    
+    # Tentar identificar iniciativa (primeira parte antes de separadores comuns)
+    separadores = ['_', '-', '|', ' ', '__']
+    
+    # Extrair possíveis iniciativas
+    for sep in separadores:
+        if sep in nome_str:
+            partes = nome_str.split(sep)
+            if len(partes) > 0:
+                # Primeira parte como possível iniciativa
+                primeira_parte = partes[0]
+                if len(primeira_parte) > 3 and primeira_parte not in padroes['plataforma']:
+                    categorias['iniciativa'] = primeira_parte
+    
+    # Identificar cliente (se houver prefixo ou sufixo específico)
+    clientes_padroes = {
+        'SYNGENTA': ['SYNGENTA', 'CROP', 'AGRO'],
+        'BAYER': ['BAYER', 'CROPSCIENCE'],
+        'BASF': ['BASF'],
+        'CORTEVA': ['CORTEVA', 'PIONEER'],
+        'NOVARTIS': ['NOVARTIS'],
+        'MONSANTO': ['MONSANTO'],
+        'JOHNSON': ['JOHNSON', 'JNJ'],
+        'PFIZER': ['PFIZER'],
+        'ROCHE': ['ROCHE'],
+        'MERCK': ['MERCK'],
+        'GLAXOSMITHKLINE': ['GSK', 'GLAXO'],
+        'ASTRAZENECA': ['ASTRAZENECA'],
+        'SANOFI': ['SANOFI']
+    }
+    
+    for cliente, padroes_cliente in clientes_padroes.items():
+        for padrao in padroes_cliente:
+            if padrao in nome_str:
+                categorias['cliente'] = cliente
+                break
+        if categorias['cliente']:
+            break
+    
+    return categorias
+
+def classificar_campanhas_multi_cliente(df, coluna_campanha='campaign'):
+    """Classifica campanhas para múltiplos clientes"""
+    if coluna_campanha not in df.columns:
+        return df
+    
+    classificacoes = []
+    
+    for idx, row in df.iterrows():
+        nome_campanha = row[coluna_campanha]
+        categorias = extrair_categorias_campanha(nome_campanha)
+        
+        # Determinar se foi classificado (pelo menos 3 categorias identificadas)
+        categorias_preenchidas = sum(1 for v in categorias.values() if v is not None)
+        classificado = 'SIM' if categorias_preenchidas >= 3 else 'NÃO'
+        
+        classificacao = {
+            'nome_campanha_original': nome_campanha,
+            'classificado': classificado,
+            'categorias_identificadas': categorias_preenchidas
+        }
+        
+        # Adicionar todas as categorias
+        for chave, valor in categorias.items():
+            classificacao[f'campaign_{chave}'] = valor
+        
+        classificacoes.append(classificacao)
+    
+    df_classificado = pd.DataFrame(classificacoes)
+    
+    # Combinar com dados originais
+    if len(df_classificado) == len(df):
+        df_resultado = df.copy()
+        for col in df_classificado.columns:
+            if col != 'nome_campanha_original':
+                df_resultado[col] = df_classificado[col]
+        
+        return df_resultado
+    
+    return df
+
+def carregar_dicionario_categorias():
+    """Carrega dicionário de categorias para sugestões"""
+    return {
+        'iniciativa': [
+            'LANCAMENTO', 'RELANCAMENTO', 'PROMOCAO', 'SAZONAL',
+            'EVENTO', 'FEIRA', 'CONGRESSO', 'WORKSHOP',
+            'DIA_ESPECIAL', 'NATAL', 'PASCOA', 'BLACKFRIDAY',
+            'CYBERMONDAY', 'VERAO', 'INVERNO', 'OUTONO', 'PRIMAVERA'
+        ],
+        'produto': [
+            'PRODUTO_A', 'PRODUTO_B', 'PRODUTO_C', 'PRODUTO_D',
+            'LINHA_X', 'LINHA_Y', 'LINHA_Z', 'FAMILIA_A', 'FAMILIA_B'
+        ],
+        'cultura': [
+            'SOJA', 'MILHO', 'CAFE', 'ALGODAO', 'CANA',
+            'TRIGO', 'ARROZ', 'FEIJAO', 'FRUTAS', 'HORTALICAS',
+            'GRÃOS', 'CEREAIS', 'OLEAGINOSAS'
+        ],
+        'categoria': [
+            'INSETICIDA', 'FUNGICIDA', 'HERBICIDA', 'ADUBO',
+            'FERTILIZANTE', 'SEMENTE', 'BIOLOGICO', 'QUIMICO',
+            'ORGANICO', 'CONVENCIONAL'
+        ],
+        'tipo_campanha': [
+            'VIDEO', 'DISPLAY', 'SEARCH', 'SOCIAL', 'EMAIL',
+            'PERFORMANCE', 'BRANDING', 'DIRECT_RESPONSE',
+            'NATIVE', 'PROGRAMMATIC', 'AUDIO', 'TV', 'RADIO'
+        ],
+        'objetivo': [
+            'AWARENESS', 'CONSIDERATION', 'CONVERSION',
+            'LEAD_GENERATION', 'SALES', 'TRAFFIC', 'ENGAGEMENT',
+            'BRAND_LIFT', 'INSTALLS', 'VIEWS'
+        ],
+        'etapa_funil': ['TOF', 'MOF', 'BOF', 'UP', 'MID', 'LOWER'],
+        'plataforma': [
+            'GOOGLE_ADS', 'FACEBOOK', 'INSTAGRAM', 'TIKTOK',
+            'LINKEDIN', 'YOUTUBE', 'TWITTER', 'PINTEREST',
+            'DV360', 'TRADEDESK', 'AMAZON_DSP'
+        ]
+    }
+
+# =============================================================================
 # INTERFACE PRINCIPAL
 # =============================================================================
 
@@ -678,6 +949,12 @@ if 'colunas_numericas' not in st.session_state:
     st.session_state.colunas_numericas = []
 if 'gemini_analysis' not in st.session_state:
     st.session_state.gemini_analysis = None
+if 'df_classificado' not in st.session_state:
+    st.session_state.df_classificado = pd.DataFrame()
+if 'relatorio_classificacao' not in st.session_state:
+    st.session_state.relatorio_classificacao = None
+if 'filtros_aplicados' not in st.session_state:
+    st.session_state.filtros_aplicados = {}
 
 # Sidebar
 with st.sidebar:
@@ -691,11 +968,11 @@ with st.sidebar:
                 st.success("✅ Conexão OK!")
     
     # Data sources
-    data_sources_opcoes = ["facebook", "google ads", "tiktok"]
+    data_sources_opcoes = ["facebook", "google ads", "tiktok", "linkedin", "twitter", "pinterest"]
     selected_sources = st.multiselect(
         "Data Sources",
         options=data_sources_opcoes,
-        default=data_sources_opcoes
+        default=data_sources_opcoes[:3]
     )
     
     # Período
@@ -743,8 +1020,14 @@ with st.sidebar:
                 if not df.empty:
                     st.session_state.df_completo = df
                     st.session_state.colunas_numericas = identificar_colunas_numericas(df)
-                    st.success(f"✅ {len(df):,} registros carregados")
+                    
+                    # Classificar campanhas automaticamente
+                    df_classificado = classificar_campanhas_multi_cliente(df)
+                    st.session_state.df_classificado = df_classificado
+                    
+                    st.success(f"✅ {len(df):,} registros carregados e classificados")
                     st.session_state.gemini_analysis = None
+                    st.session_state.filtros_aplicados = {}
                 else:
                     st.error("Nenhum dado encontrado")
             else:
@@ -753,23 +1036,160 @@ with st.sidebar:
 # Verificar dados
 df = st.session_state.df_completo
 colunas_numericas = st.session_state.colunas_numericas
+df_classificado = st.session_state.df_classificado
 
 if df.empty:
     st.warning("📭 Nenhum dado carregado. Use o botão na sidebar.")
     st.stop()
 
-# Abas principais
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+# =============================================================================
+# SEÇÃO DE FILTROS MULTI-CLIENTE (ACIMA DAS ABAS)
+# =============================================================================
+
+st.markdown("## 🔍 Filtros Avançados por Categoria de Campanha")
+
+# Criar colunas para filtros
+filtro_col1, filtro_col2, filtro_col3 = st.columns(3)
+
+with filtro_col1:
+    # Filtro por Cliente
+    if 'campaign_cliente' in df_classificado.columns:
+        clientes = sorted(df_classificado['campaign_cliente'].dropna().unique())
+        cliente_selecionado = st.selectbox(
+            "👥 Cliente:",
+            options=['Todos'] + list(clientes)
+        )
+        if cliente_selecionado != 'Todos':
+            st.session_state.filtros_aplicados['campaign_cliente'] = cliente_selecionado
+    
+    # Filtro por Iniciativa
+    if 'campaign_iniciativa' in df_classificado.columns:
+        iniciativas = sorted(df_classificado['campaign_iniciativa'].dropna().unique())
+        iniciativa_selecionada = st.selectbox(
+            "🚀 Iniciativa:",
+            options=['Todas'] + list(iniciativas)
+        )
+        if iniciativa_selecionada != 'Todas':
+            st.session_state.filtros_aplicados['campaign_iniciativa'] = iniciativa_selecionada
+
+with filtro_col2:
+    # Filtro por Produto
+    if 'campaign_produto' in df_classificado.columns:
+        produtos = sorted(df_classificado['campaign_produto'].dropna().unique())
+        produto_selecionado = st.selectbox(
+            "📦 Produto:",
+            options=['Todos'] + list(produtos)
+        )
+        if produto_selecionado != 'Todos':
+            st.session_state.filtros_aplicados['campaign_produto'] = produto_selecionado
+    
+    # Filtro por Cultura
+    if 'campaign_cultura' in df_classificado.columns:
+        culturas = sorted(df_classificado['campaign_cultura'].dropna().unique())
+        cultura_selecionada = st.selectbox(
+            "🌱 Cultura/Setor:",
+            options=['Todas'] + list(culturas)
+        )
+        if cultura_selecionada != 'Todas':
+            st.session_state.filtros_aplicados['campaign_cultura'] = cultura_selecionada
+
+with filtro_col3:
+    # Filtro por Tipo de Campanha
+    if 'campaign_tipo_campanha' in df_classificado.columns:
+        tipos = sorted(df_classificado['campaign_tipo_campanha'].dropna().unique())
+        tipo_selecionado = st.selectbox(
+            "🎯 Tipo de Campanha:",
+            options=['Todos'] + list(tipos)
+        )
+        if tipo_selecionado != 'Todos':
+            st.session_state.filtros_aplicados['campaign_tipo_campanha'] = tipo_selecionado
+    
+    # Filtro por Objetivo
+    if 'campaign_objetivo' in df_classificado.columns:
+        objetivos = sorted(df_classificado['campaign_objetivo'].dropna().unique())
+        objetivo_selecionado = st.selectbox(
+            "🎯 Objetivo:",
+            options=['Todos'] + list(objetivos)
+        )
+        if objetivo_selecionado != 'Todos':
+            st.session_state.filtros_aplicados['campaign_objetivo'] = objetivo_selecionado
+
+# Filtros adicionais em uma nova linha
+filtro_col4, filtro_col5, filtro_col6 = st.columns(3)
+
+with filtro_col4:
+    # Filtro por Etapa do Funil
+    if 'campaign_etapa_funil' in df_classificado.columns:
+        etapas = sorted(df_classificado['campaign_etapa_funil'].dropna().unique())
+        etapa_selecionada = st.selectbox(
+            "📊 Etapa do Funil:",
+            options=['Todas'] + list(etapas)
+        )
+        if etapa_selecionada != 'Todas':
+            st.session_state.filtros_aplicados['campaign_etapa_funil'] = etapa_selecionada
+
+with filtro_col5:
+    # Filtro por Plataforma
+    if 'campaign_plataforma' in df_classificado.columns:
+        plataformas = sorted(df_classificado['campaign_plataforma'].dropna().unique())
+        plataforma_selecionada = st.selectbox(
+            "🖥️ Plataforma:",
+            options=['Todas'] + list(plataformas)
+        )
+        if plataforma_selecionada != 'Todas':
+            st.session_state.filtros_aplicados['campaign_plataforma'] = plataforma_selecionada
+
+with filtro_col6:
+    # Filtro por Agência
+    if 'campaign_agencia' in df_classificado.columns:
+        agencias = sorted(df_classificado['campaign_agencia'].dropna().unique())
+        agencia_selecionada = st.selectbox(
+            "🏢 Agência:",
+            options=['Todas'] + list(agencias)
+        )
+        if agencia_selecionada != 'Todas':
+            st.session_state.filtros_aplicados['campaign_agencia'] = agencia_selecionada
+
+# Botões de ação para filtros
+col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 2])
+
+with col_btn1:
+    if st.button("✅ Aplicar Filtros", use_container_width=True):
+        st.rerun()
+
+with col_btn2:
+    if st.button("🔄 Limpar Filtros", use_container_width=True):
+        st.session_state.filtros_aplicados = {}
+        st.rerun()
+
+# Aplicar filtros aos dados
+df_filtrado = df_classificado.copy()
+if st.session_state.filtros_aplicados:
+    for coluna, valor in st.session_state.filtros_aplicados.items():
+        if coluna in df_filtrado.columns:
+            df_filtrado = df_filtrado[df_filtrado[coluna] == valor]
+
+# Mostrar status dos filtros
+if st.session_state.filtros_aplicados:
+    st.markdown(f"### 📊 Dados Filtrados: {len(df_filtrado):,} registros")
+    filtros_texto = " | ".join([f"{k.replace('campaign_', '')}: {v}" for k, v in st.session_state.filtros_aplicados.items()])
+    st.info(f"**Filtros ativos:** {filtros_texto}")
+else:
+    st.markdown(f"### 📊 Dados Completos: {len(df_filtrado):,} registros")
+
+# Abas principais (usando df_filtrado em vez de df)
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "📋 Visão Geral", 
     "📈 Análise Numérica", 
     "🔍 Explorar Colunas", 
     "📊 Visualizar Dados",
     "🎯 Performance",
-    "🤖 Análise com IA"
+    "🤖 Análise com IA",
+    "🎪 Classificador Campanhas"
 ])
 
 # =============================================================================
-# TAB 1: VISÃO GERAL
+# TAB 1: VISÃO GERAL (COM DADOS FILTRADOS)
 # =============================================================================
 
 with tab1:
@@ -778,17 +1198,18 @@ with tab1:
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        safe_metric("Total de Colunas", len(df.columns))
+        safe_metric("Total de Colunas", len(df_filtrado.columns))
     
     with col2:
-        safe_metric("Colunas Numéricas", len(colunas_numericas))
+        col_numericas_filtradas = identificar_colunas_numericas(df_filtrado)
+        safe_metric("Colunas Numéricas", len(col_numericas_filtradas))
     
     with col3:
-        safe_metric("Total de Registros", len(df))
+        safe_metric("Total de Registros", len(df_filtrado))
     
     with col4:
         try:
-            memoria_mb = df.memory_usage(deep=True).sum() / 1024**2
+            memoria_mb = df_filtrado.memory_usage(deep=True).sum() / 1024**2
             safe_metric("Uso de Memória", memoria_mb)
         except:
             safe_metric("Uso de Memória", "N/A")
@@ -811,15 +1232,15 @@ with tab1:
     # Preparar lista
     colunas_para_mostrar = []
     
-    for col in df.columns:
+    for col in df_filtrado.columns:
         incluir = True
         
         if tipo_filtro == "Numéricas":
-            incluir = col in colunas_numericas
+            incluir = col in col_numericas_filtradas
         elif tipo_filtro == "Texto":
-            incluir = df[col].dtype == 'object' and col not in colunas_numericas
+            incluir = df_filtrado[col].dtype == 'object' and col not in col_numericas_filtradas
         elif tipo_filtro == "Datas":
-            incluir = pd.api.types.is_datetime64_any_dtype(df[col])
+            incluir = pd.api.types.is_datetime64_any_dtype(df_filtrado[col])
         
         if pesquisa_coluna and pesquisa_coluna.lower() not in col.lower():
             incluir = False
@@ -829,7 +1250,7 @@ with tab1:
     
     # Mostrar informações
     for col in sorted(colunas_para_mostrar)[:50]:
-        analise = analisar_coluna(df, col)
+        analise = analisar_coluna(df_filtrado, col)
         
         if analise:
             with st.expander(f"**{col}** ({analise['tipo_detalhado'] if 'tipo_detalhado' in analise else analise['tipo']})"):
@@ -863,21 +1284,23 @@ with tab1:
                         safe_metric("Q3 (75%)", analise.get('q3', 0))
 
 # =============================================================================
-# TAB 2: ANÁLISE NUMÉRICA
+# TAB 2: ANÁLISE NUMÉRICA (COM DADOS FILTRADOS)
 # =============================================================================
 
 with tab2:
     st.header("📈 Análise de Colunas Numéricas")
     
-    if not colunas_numericas:
+    col_numericas_filtradas = identificar_colunas_numericas(df_filtrado)
+    
+    if not col_numericas_filtradas:
         st.warning("Nenhuma coluna numérica")
     else:
-        st.success(f"✅ {len(colunas_numericas)} colunas numéricas")
+        st.success(f"✅ {len(col_numericas_filtradas)} colunas numéricas")
         
         colunas_selecionadas = st.multiselect(
             "Selecione colunas para análise",
-            options=colunas_numericas,
-            default=colunas_numericas[:min(5, len(colunas_numericas))],
+            options=col_numericas_filtradas,
+            default=col_numericas_filtradas[:min(5, len(col_numericas_filtradas))],
             key="colunas_selecionadas_tab2"
         )
         
@@ -886,11 +1309,11 @@ with tab2:
             st.subheader("📊 Estatísticas Descritivas")
             
             # Converter para numérico
-            df_numeric = df[colunas_selecionadas].apply(pd.to_numeric, errors='coerce')
+            df_numeric = df_filtrado[colunas_selecionadas].apply(pd.to_numeric, errors='coerce')
             
             stats_df = df_numeric.describe().T
             stats_df['missing'] = df_numeric.isna().sum()
-            stats_df['missing_pct'] = (df_numeric.isna().sum() / len(df) * 100)
+            stats_df['missing_pct'] = (df_numeric.isna().sum() / len(df_filtrado) * 100)
             
             def formatar_numero(x):
                 if isinstance(x, (int, np.integer)):
@@ -925,7 +1348,7 @@ with tab2:
                 
                 for idx, col in enumerate(colunas_selecionadas[:num_cols*3]):
                     with cols_vis[idx % num_cols]:
-                        fig = criar_visualizacao_coluna(df, col)
+                        fig = criar_visualizacao_coluna(df_filtrado, col)
                         if fig:
                             st.plotly_chart(fig, use_container_width=True)
                         else:
@@ -975,7 +1398,7 @@ with tab2:
                     st.error(f"Erro ao calcular correlações: {str(e)[:100]}")
 
 # =============================================================================
-# TAB 3: EXPLORAR COLUNAS
+# TAB 3: EXPLORAR COLUNAS (COM DADOS FILTRADOS)
 # =============================================================================
 
 with tab3:
@@ -983,13 +1406,13 @@ with tab3:
     
     coluna_selecionada = st.selectbox(
         "Selecione uma coluna para explorar",
-        options=sorted(df.columns),
+        options=sorted(df_filtrado.columns),
         index=0,
         key="coluna_selecionada_tab3"
     )
     
     if coluna_selecionada:
-        analise = analisar_coluna(df, coluna_selecionada)
+        analise = analisar_coluna(df_filtrado, coluna_selecionada)
         
         if analise is not None:
             col_info1, col_info2 = st.columns(2)
@@ -1005,7 +1428,7 @@ with tab3:
             
             # Visualização
             st.subheader("📊 Visualização")
-            fig = criar_visualizacao_coluna(df, coluna_selecionada)
+            fig = criar_visualizacao_coluna(df_filtrado, coluna_selecionada)
             if fig:
                 st.plotly_chart(fig, use_container_width=True)
             else:
@@ -1019,7 +1442,7 @@ with tab3:
             with col_amostra1:
                 st.write("**Primeiros 10:**")
                 try:
-                    primeiros = df[coluna_selecionada].head(10).tolist()
+                    primeiros = df_filtrado[coluna_selecionada].head(10).tolist()
                     primeiros_str = [str(x) for x in primeiros]
                     st.write(primeiros_str)
                 except:
@@ -1028,7 +1451,7 @@ with tab3:
             with col_amostra2:
                 st.write("**Últimos 10:**")
                 try:
-                    ultimos = df[coluna_selecionada].tail(10).tolist()
+                    ultimos = df_filtrado[coluna_selecionada].tail(10).tolist()
                     ultimos_str = [str(x) for x in ultimos]
                     st.write(ultimos_str)
                 except:
@@ -1039,11 +1462,11 @@ with tab3:
                 st.subheader("📊 Distribuição")
                 
                 try:
-                    contagem = df[coluna_selecionada].value_counts()
+                    contagem = df_filtrado[coluna_selecionada].value_counts()
                     df_contagem = pd.DataFrame({
                         'Valor': contagem.index.astype(str),
                         'Contagem': contagem.values,
-                        'Percentual': (contagem.values / len(df) * 100)
+                        'Percentual': (contagem.values / len(df_filtrado) * 100)
                     })
                     
                     st.dataframe(
@@ -1054,7 +1477,7 @@ with tab3:
                     st.error("Erro ao calcular distribuição")
 
 # =============================================================================
-# TAB 4: VISUALIZAR DADOS
+# TAB 4: VISUALIZAR DADOS (COM DADOS FILTRADOS)
 # =============================================================================
 
 with tab4:
@@ -1063,22 +1486,22 @@ with tab4:
     # Selecionar colunas
     colunas_vis = st.multiselect(
         "Selecione colunas para visualizar",
-        options=sorted(df.columns),
-        default=sorted(df.columns)[:min(10, len(df.columns))],
+        options=sorted(df_filtrado.columns),
+        default=sorted(df_filtrado.columns)[:min(10, len(df_filtrado.columns))],
         key="colunas_vis_tab4"
     )
     
     if colunas_vis:
-        # Filtros
-        st.subheader("🔍 Filtros")
+        # Filtros adicionais dentro da tab
+        st.subheader("🔍 Filtros Adicionais")
         
         col_f1, col_f2, col_f3 = st.columns(3)
         
-        df_filtrado = df.copy()
+        df_filtrado_tab4 = df_filtrado.copy()
         
         with col_f1:
-            if 'datasource' in df.columns:
-                datasources = sorted(df['datasource'].dropna().unique())
+            if 'datasource' in df_filtrado.columns:
+                datasources = sorted(df_filtrado['datasource'].dropna().unique())
                 ds_selecionados = st.multiselect(
                     "Data Sources",
                     options=datasources,
@@ -1086,10 +1509,10 @@ with tab4:
                     key="ds_selecionados_tab4"
                 )
                 if ds_selecionados:
-                    df_filtrado = df_filtrado[df_filtrado['datasource'].isin(ds_selecionados)]
+                    df_filtrado_tab4 = df_filtrado_tab4[df_filtrado_tab4['datasource'].isin(ds_selecionados)]
         
         with col_f2:
-            colunas_num_vis = [c for c in colunas_vis if c in colunas_numericas]
+            colunas_num_vis = [c for c in colunas_vis if c in identificar_colunas_numericas(df_filtrado)]
             if colunas_num_vis:
                 col_filtro = st.selectbox(
                     "Filtrar por coluna numérica",
@@ -1098,14 +1521,14 @@ with tab4:
                 )
                 if col_filtro != 'Nenhum':
                     try:
-                        col_data = pd.to_numeric(df_filtrado[col_filtro], errors='coerce').dropna()
+                        col_data = pd.to_numeric(df_filtrado_tab4[col_filtro], errors='coerce').dropna()
                         if len(col_data) > 0:
                             min_val = st.number_input(
                                 f"Valor mínimo de {col_filtro}",
                                 value=float(col_data.min()),
                                 key=f"min_val_{col_filtro}_tab4"
                             )
-                            df_filtrado = df_filtrado[pd.to_numeric(df_filtrado[col_filtro], errors='coerce') >= min_val]
+                            df_filtrado_tab4 = df_filtrado_tab4[pd.to_numeric(df_filtrado_tab4[col_filtro], errors='coerce') >= min_val]
                     except:
                         st.warning(f"Não foi possível filtrar por {col_filtro}")
         
@@ -1113,10 +1536,10 @@ with tab4:
             limite_linhas = st.slider("Linhas para mostrar", 10, 1000, 100, key="limite_linhas_tab4")
         
         # Mostrar dados
-        st.subheader(f"📋 Dados ({len(df_filtrado):,} registros)")
+        st.subheader(f"📋 Dados ({len(df_filtrado_tab4):,} registros)")
         
-        if len(df_filtrado) > 0:
-            total_pages = max(1, len(df_filtrado) // limite_linhas + 1)
+        if len(df_filtrado_tab4) > 0:
+            total_pages = max(1, len(df_filtrado_tab4) // limite_linhas + 1)
             
             col_pg1, col_pg2, col_pg3 = st.columns([1, 2, 1])
             
@@ -1134,25 +1557,25 @@ with tab4:
                     st.write("Página: 1")
             
             with col_pg3:
-                st.caption(f"Total: {len(df_filtrado):,} registros")
+                st.caption(f"Total: {len(df_filtrado_tab4):,} registros")
             
             # Calcular índice
             start_idx = (page_number - 1) * limite_linhas
-            end_idx = min(start_idx + limite_linhas, len(df_filtrado))
+            end_idx = min(start_idx + limite_linhas, len(df_filtrado_tab4))
             
             # Formatar DataFrame
-            df_display = df_filtrado[colunas_vis].iloc[start_idx:end_idx].copy()
+            df_display = df_filtrado_tab4[colunas_vis].iloc[start_idx:end_idx].copy()
             
             # Formatar números e datas
             for col in colunas_vis:
-                if col in colunas_numericas:
+                if col in identificar_colunas_numericas(df_filtrado):
                     try:
                         df_display[col] = df_display[col].apply(
                             lambda x: f"{x:,.2f}" if isinstance(x, (int, float)) and not pd.isna(x) else ""
                         )
                     except:
                         pass
-                elif pd.api.types.is_datetime64_any_dtype(df[col]):
+                elif pd.api.types.is_datetime64_any_dtype(df_filtrado[col]):
                     try:
                         df_display[col] = df_display[col].dt.strftime('%Y-%m-%d')
                     except:
@@ -1169,12 +1592,12 @@ with tab4:
         # Download
         st.subheader("📥 Exportar")
         
-        if len(df_filtrado) > 0:
-            csv = df_filtrado[colunas_vis].to_csv(index=False)
+        if len(df_filtrado_tab4) > 0:
+            csv = df_filtrado_tab4[colunas_vis].to_csv(index=False)
             st.download_button(
                 label="📥 Baixar CSV",
                 data=csv,
-                file_name=f"dados_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                file_name=f"dados_filtrados_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                 mime="text/csv",
                 key="download_csv_tab4"
             )
@@ -1182,13 +1605,13 @@ with tab4:
             st.warning("Nenhum dado para exportar")
 
 # =============================================================================
-# TAB 5: PERFORMANCE
+# TAB 5: PERFORMANCE (COM DADOS FILTRADOS)
 # =============================================================================
 
 with tab5:
     st.header("🎯 Análise de Performance")
     
-    if 'campaign' not in df.columns:
+    if 'campaign' not in df_filtrado.columns:
         st.error("❌ Coluna 'campaign' não encontrada.")
     else:
         # Métricas gerais
@@ -1198,16 +1621,16 @@ with tab5:
         
         with col1:
             try:
-                num_campaigns = df['campaign'].nunique()
+                num_campaigns = df_filtrado['campaign'].nunique()
                 safe_metric("Campanhas", num_campaigns)
             except:
                 safe_metric("Campanhas", "Erro")
         
         with col2:
-            if 'date' in df.columns:
+            if 'date' in df_filtrado.columns:
                 try:
                     # Garantir que é datetime
-                    df_date = df['date'].dropna()
+                    df_date = df_filtrado['date'].dropna()
                     if len(df_date) > 0:
                         if not pd.api.types.is_datetime64_any_dtype(df_date):
                             df_date = pd.to_datetime(df_date, errors='coerce')
@@ -1219,17 +1642,17 @@ with tab5:
                     safe_metric("Dias", "Erro")
         
         with col3:
-            if 'datasource' in df.columns:
+            if 'datasource' in df_filtrado.columns:
                 try:
-                    sources = df['datasource'].nunique()
+                    sources = df_filtrado['datasource'].nunique()
                     safe_metric("Data Sources", sources)
                 except:
                     safe_metric("Data Sources", "Erro")
         
         with col4:
             try:
-                num_campaigns_val = df['campaign'].nunique()
-                records_per_campaign = len(df) / num_campaigns_val if num_campaigns_val > 0 else 0
+                num_campaigns_val = df_filtrado['campaign'].nunique()
+                records_per_campaign = len(df_filtrado) / num_campaigns_val if num_campaigns_val > 0 else 0
                 safe_metric("Média Reg/Camp", f"{records_per_campaign:.1f}")
             except:
                 safe_metric("Média Reg/Camp", "Erro")
@@ -1237,9 +1660,9 @@ with tab5:
         # Análise por campanha
         st.subheader("📈 Top Campanhas")
         
-        if 'campaign' in df.columns:
+        if 'campaign' in df_filtrado.columns:
             try:
-                campaign_stats = df['campaign'].value_counts().head(10)
+                campaign_stats = df_filtrado['campaign'].value_counts().head(10)
                 
                 fig = px.bar(
                     x=campaign_stats.index.astype(str),
@@ -1256,8 +1679,9 @@ with tab5:
         st.subheader("💰 Métricas Financeiras")
         
         financial_metrics = []
+        col_numericas_filtradas = identificar_colunas_numericas(df_filtrado)
         for metric in ['spend', 'revenue', 'conversions', 'roas', 'cpc']:
-            for col in colunas_numericas:
+            for col in col_numericas_filtradas:
                 if metric in col.lower():
                     financial_metrics.append(col)
                     break
@@ -1266,15 +1690,50 @@ with tab5:
             cols = st.columns(min(4, len(financial_metrics)))
             for idx, metric in enumerate(financial_metrics[:4]):
                 with cols[idx]:
-                    if metric in df.columns:
+                    if metric in df_filtrado.columns:
                         try:
-                            total = pd.to_numeric(df[metric], errors='coerce').sum()
+                            total = pd.to_numeric(df_filtrado[metric], errors='coerce').sum()
                             safe_metric(metric, total)
                         except:
                             safe_metric(metric, "Erro")
+        
+        # Análise por categoria (se disponível)
+        st.subheader("📊 Análise por Categoria")
+        
+        col_cat1, col_cat2 = st.columns(2)
+        
+        with col_cat1:
+            if 'campaign_cliente' in df_filtrado.columns:
+                try:
+                    cliente_stats = df_filtrado['campaign_cliente'].value_counts().head(10)
+                    
+                    fig_cliente = px.pie(
+                        values=cliente_stats.values,
+                        names=cliente_stats.index,
+                        title="Distribuição por Cliente",
+                        hole=0.3
+                    )
+                    st.plotly_chart(fig_cliente, use_container_width=True)
+                except:
+                    pass
+        
+        with col_cat2:
+            if 'campaign_tipo_campanha' in df_filtrado.columns:
+                try:
+                    tipo_stats = df_filtrado['campaign_tipo_campanha'].value_counts().head(10)
+                    
+                    fig_tipo = px.bar(
+                        x=tipo_stats.index,
+                        y=tipo_stats.values,
+                        title="Distribuição por Tipo de Campanha"
+                    )
+                    fig_tipo.update_xaxes(tickangle=45)
+                    st.plotly_chart(fig_tipo, use_container_width=True)
+                except:
+                    pass
 
 # =============================================================================
-# TAB 6: ANÁLISE COM IA - CORRIGIDO
+# TAB 6: ANÁLISE COM IA (COM DADOS FILTRADOS)
 # =============================================================================
 
 with tab6:
@@ -1285,7 +1744,7 @@ with tab6:
         st.info("Configure a chave do Gemini nas variáveis de ambiente ou secrets.")
         st.stop()
     
-    if df.empty:
+    if df_filtrado.empty:
         st.warning("📭 Nenhum dado carregado.")
         st.stop()
     
@@ -1296,8 +1755,8 @@ with tab6:
         col_filter1, col_filter2 = st.columns(2)
         
         with col_filter1:
-            if 'datasource' in df.columns:
-                datasources = sorted(df['datasource'].dropna().unique())
+            if 'datasource' in df_filtrado.columns:
+                datasources = sorted(df_filtrado['datasource'].dropna().unique())
                 selected_ds = st.multiselect(
                     "Data Sources:",
                     options=datasources,
@@ -1306,10 +1765,10 @@ with tab6:
             else:
                 selected_ds = None
             
-            if 'date' in df.columns:
+            if 'date' in df_filtrado.columns:
                 try:
                     # Garantir que a coluna date é datetime
-                    date_series = df['date'].dropna()
+                    date_series = df_filtrado['date'].dropna()
                     if len(date_series) > 0:
                         if not pd.api.types.is_datetime64_any_dtype(date_series):
                             date_series = pd.to_datetime(date_series, errors='coerce')
@@ -1333,8 +1792,8 @@ with tab6:
                 date_range = None
         
         with col_filter2:
-            if 'campaign' in df.columns:
-                campaigns = sorted(df['campaign'].dropna().unique())
+            if 'campaign' in df_filtrado.columns:
+                campaigns = sorted(df_filtrado['campaign'].dropna().unique())
                 selected_campaigns = st.multiselect(
                     "Campanhas (opcional):",
                     options=campaigns
@@ -1345,46 +1804,46 @@ with tab6:
             max_records = st.slider(
                 "Máximo de registros:",
                 min_value=100,
-                max_value=min(10000, len(df)),
-                value=min(5000, len(df)),
+                max_value=min(10000, len(df_filtrado)),
+                value=min(5000, len(df_filtrado)),
                 step=100
             )
     
-    # Aplicar filtros - CORREÇÃO DO ERRO PRINCIPAL
-    df_filtered = df.copy()
+    # Aplicar filtros adicionais
+    df_filtered_ia = df_filtrado.copy()
     
     # Filtro por datasource
-    if selected_ds and 'datasource' in df_filtered.columns and len(selected_ds) > 0:
-        df_filtered = df_filtered[df_filtered['datasource'].isin(selected_ds)]
+    if selected_ds and 'datasource' in df_filtered_ia.columns and len(selected_ds) > 0:
+        df_filtered_ia = df_filtered_ia[df_filtered_ia['datasource'].isin(selected_ds)]
     
-    # Filtro por data - CORREÇÃO AQUI
-    if date_range and len(date_range) == 2 and 'date' in df_filtered.columns:
+    # Filtro por data
+    if date_range and len(date_range) == 2 and 'date' in df_filtered_ia.columns:
         start_date, end_date = date_range
         
         # Garantir que a coluna date é datetime
-        if not pd.api.types.is_datetime64_any_dtype(df_filtered['date']):
-            df_filtered['date'] = pd.to_datetime(df_filtered['date'], errors='coerce')
+        if not pd.api.types.is_datetime64_any_dtype(df_filtered_ia['date']):
+            df_filtered_ia['date'] = pd.to_datetime(df_filtered_ia['date'], errors='coerce')
         
         # Filtrar apenas datas válidas
-        mask = df_filtered['date'].notna()
+        mask = df_filtered_ia['date'].notna()
         
         # Converter start_date e end_date para datetime
         start_dt = pd.Timestamp(start_date)
         end_dt = pd.Timestamp(end_date)
         
         # Aplicar filtro de data
-        df_filtered = df_filtered[
+        df_filtered_ia = df_filtered_ia[
             mask & 
-            (df_filtered['date'] >= start_dt) & 
-            (df_filtered['date'] <= end_dt)
+            (df_filtered_ia['date'] >= start_dt) & 
+            (df_filtered_ia['date'] <= end_dt)
         ]
     
     # Filtro por campanha
-    if selected_campaigns and 'campaign' in df_filtered.columns and len(selected_campaigns) > 0:
-        df_filtered = df_filtered[df_filtered['campaign'].isin(selected_campaigns)]
+    if selected_campaigns and 'campaign' in df_filtered_ia.columns and len(selected_campaigns) > 0:
+        df_filtered_ia = df_filtered_ia[df_filtered_ia['campaign'].isin(selected_campaigns)]
     
     # Limitar registros
-    df_filtered = df_filtered.head(max_records)
+    df_filtered_ia = df_filtered_ia.head(max_records)
     
     # Estatísticas
     st.markdown("### 📊 Dados Selecionados")
@@ -1392,29 +1851,29 @@ with tab6:
     col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
     
     with col_stat1:
-        safe_metric("Registros", len(df_filtered))
+        safe_metric("Registros", len(df_filtered_ia))
     
     with col_stat2:
-        if 'campaign' in df_filtered.columns:
+        if 'campaign' in df_filtered_ia.columns:
             try:
-                num_campaigns = df_filtered['campaign'].nunique()
+                num_campaigns = df_filtered_ia['campaign'].nunique()
                 safe_metric("Campanhas", num_campaigns)
             except:
                 safe_metric("Campanhas", "Erro")
     
     with col_stat3:
-        if 'datasource' in df_filtered.columns:
+        if 'datasource' in df_filtered_ia.columns:
             try:
-                num_sources = df_filtered['datasource'].nunique()
+                num_sources = df_filtered_ia['datasource'].nunique()
                 safe_metric("Data Sources", num_sources)
             except:
                 safe_metric("Data Sources", "Erro")
     
     with col_stat4:
-        if 'date' in df_filtered.columns:
+        if 'date' in df_filtered_ia.columns:
             try:
                 # Garantir que é datetime
-                date_series = df_filtered['date'].dropna()
+                date_series = df_filtered_ia['date'].dropna()
                 if len(date_series) > 0:
                     if not pd.api.types.is_datetime64_any_dtype(date_series):
                         date_series = pd.to_datetime(date_series, errors='coerce')
@@ -1451,13 +1910,13 @@ with tab6:
     generate_button = st.button("🤖 Gerar Análise com Gemini", type="primary", use_container_width=True)
     
     if generate_button:
-        if df_filtered.empty:
+        if df_filtered_ia.empty:
             st.error("❌ Nenhum dado após filtros.")
         else:
-            with st.spinner(f"🤖 Analisando {len(df_filtered):,} registros..."):
+            with st.spinner(f"🤖 Analisando {len(df_filtered_ia):,} registros..."):
                 try:
                     analysis_result = generate_gemini_analysis(
-                        df_filtered, 
+                        df_filtered_ia, 
                         analysis_focus, 
                         user_instructions
                     )
@@ -1499,11 +1958,10 @@ with tab6:
         st.info("""
         ## 📋 Como usar:
         
-        1. **Carregue os dados** na sidebar
-        2. **Ajuste os filtros** acima
-        3. **Selecione o foco** da análise
-        4. **Adicione instruções** se desejar
-        5. **Clique em 'Gerar Análise'**
+        1. **Ajuste os filtros** acima
+        2. **Selecione o foco** da análise
+        3. **Adicione instruções** se desejar
+        4. **Clique em 'Gerar Análise'**
         
         ## 🎯 Você receberá:
         
@@ -1515,6 +1973,248 @@ with tab6:
         """)
 
 # =============================================================================
+# TAB 7: CLASSIFICADOR DE CAMPANHAS MULTI-CLIENTES
+# =============================================================================
+
+with tab7:
+    st.markdown('<div class="campaign-classifier"><h2>🎪 Classificador de Campanhas Multi-Clientes</h2></div>', unsafe_allow_html=True)
+    
+    # Carregar dicionário de categorias
+    dicionario_categorias = carregar_dicionario_categorias()
+    
+    col_intro1, col_intro2 = st.columns(2)
+    
+    with col_intro1:
+        st.markdown("### 📋 Sobre o Sistema")
+        st.info("""
+        Este classificador analisa nomes de campanhas de **múltiplos clientes**
+        identificando automaticamente categorias como:
+        
+        - 👥 **Cliente** (Syngenta, Bayer, Basf, etc.)
+        - 🚀 **Iniciativa** (lançamento, promoção, evento)
+        - 📦 **Produto** (linhas e famílias de produtos)
+        - 🌱 **Cultura/Setor** (soja, milho, café, etc.)
+        - 🎯 **Tipo de Campanha** (vídeo, display, search)
+        - 🎯 **Objetivo** (awareness, conversão, leads)
+        - 📊 **Etapa do Funil** (TOF, MOF, BOF)
+        - 🖥️ **Plataforma** (Google, Facebook, Instagram)
+        """)
+    
+    with col_intro2:
+        st.markdown("### 🔍 Status da Classificação")
+        
+        if 'classificado' in df_classificado.columns:
+            total = len(df_classificado)
+            classificadas = df_classificado[df_classificado['classificado'] == 'SIM'].shape[0]
+            taxa = (classificadas / total * 100) if total > 0 else 0
+            
+            col_stat1, col_stat2 = st.columns(2)
+            with col_stat1:
+                safe_metric("Total", total)
+                safe_metric("Classificadas", classificadas)
+            with col_stat2:
+                safe_metric("Taxa", f"{taxa:.1f}%")
+                
+                # Contar clientes identificados
+                if 'campaign_cliente' in df_classificado.columns:
+                    clientes_unicos = df_classificado['campaign_cliente'].nunique()
+                    safe_metric("Clientes", clientes_unicos)
+        else:
+            st.warning("Nenhuma classificação disponível")
+    
+    # Análise de distribuição
+    st.markdown("### 📊 Distribuição por Categoria")
+    
+    col_dist1, col_dist2, col_dist3 = st.columns(3)
+    
+    with col_dist1:
+        if 'campaign_cliente' in df_classificado.columns:
+            try:
+                cliente_counts = df_classificado['campaign_cliente'].value_counts().head(10)
+                fig_clientes = px.bar(
+                    x=cliente_counts.index,
+                    y=cliente_counts.values,
+                    title="Top 10 Clientes",
+                    color=cliente_counts.values,
+                    color_continuous_scale='Viridis'
+                )
+                fig_clientes.update_xaxes(tickangle=45)
+                st.plotly_chart(fig_clientes, use_container_width=True)
+            except:
+                pass
+    
+    with col_dist2:
+        if 'campaign_tipo_campanha' in df_classificado.columns:
+            try:
+                tipo_counts = df_classificado['campaign_tipo_campanha'].value_counts().head(10)
+                fig_tipos = px.pie(
+                    values=tipo_counts.values,
+                    names=tipo_counts.index,
+                    title="Tipos de Campanha",
+                    hole=0.3
+                )
+                st.plotly_chart(fig_tipos, use_container_width=True)
+            except:
+                pass
+    
+    with col_dist3:
+        if 'campaign_etapa_funil' in df_classificado.columns:
+            try:
+                etapa_counts = df_classificado['campaign_etapa_funil'].value_counts()
+                fig_etapas = px.bar(
+                    x=etapa_counts.index,
+                    y=etapa_counts.values,
+                    title="Etapas do Funil",
+                    color=etapa_counts.values,
+                    color_continuous_scale='Blues'
+                )
+                st.plotly_chart(fig_etapas, use_container_width=True)
+            except:
+                pass
+    
+    # Explorador de campanhas
+    st.markdown("### 🔍 Explorador de Campanhas")
+    
+    col_explorer1, col_explorer2 = st.columns(2)
+    
+    with col_explorer1:
+        # Selecionar uma campanha para análise detalhada
+        if 'campaign' in df_classificado.columns:
+            campanhas = sorted(df_classificado['campaign'].dropna().unique())
+            campanha_selecionada = st.selectbox(
+                "Selecione uma campanha para análise:",
+                options=campanhas[:100]  # Limitar para performance
+            )
+            
+            if campanha_selecionada:
+                campanha_data = df_classificado[df_classificado['campaign'] == campanha_selecionada].iloc[0]
+                
+                st.markdown("#### 📋 Detalhes da Campanha")
+                st.write(f"**Nome:** {campanha_selecionada}")
+                
+                # Mostrar categorias identificadas
+                categorias_identificadas = {}
+                for col in df_classificado.columns:
+                    if col.startswith('campaign_') and col != 'campaign_classificado' and col != 'categorias_identificadas':
+                        valor = campanha_data[col]
+                        if pd.notna(valor):
+                            nome_categoria = col.replace('campaign_', '').replace('_', ' ').title()
+                            categorias_identificadas[nome_categoria] = valor
+                
+                if categorias_identificadas:
+                    st.markdown("#### 🏷️ Categorias Identificadas")
+                    for categoria, valor in categorias_identificadas.items():
+                        st.write(f"**{categoria}:** {valor}")
+                else:
+                    st.info("Nenhuma categoria identificada para esta campanha")
+    
+    with col_explorer2:
+        # Estatísticas de classificação
+        st.markdown("#### 📈 Estatísticas de Classificação")
+        
+        if 'classificado' in df_classificado.columns:
+            # Gráfico de classificação
+            status_counts = df_classificado['classificado'].value_counts()
+            fig_status = px.pie(
+                values=status_counts.values,
+                names=status_counts.index,
+                title="Status de Classificação",
+                color=status_counts.values,
+                color_discrete_sequence=['#10b981', '#ef4444']
+            )
+            st.plotly_chart(fig_status, use_container_width=True)
+        
+        # Botão para reclassificar
+        if st.button("🔄 Reclassificar Campanhas", use_container_width=True):
+            with st.spinner("Reclassificando campanhas..."):
+                df_classificado_novo = classificar_campanhas_multi_cliente(df)
+                st.session_state.df_classificado = df_classificado_novo
+                st.success("✅ Campanhas reclassificadas!")
+                st.rerun()
+    
+    # Exportar dados classificados
+    st.markdown("### 📥 Exportar Dados Classificados")
+    
+    if len(df_classificado) > 0:
+        # Selecionar colunas para exportar
+        colunas_classificadas = [col for col in df_classificado.columns if col.startswith('campaign_')]
+        colunas_base = ['campaign', 'date', 'datasource'] if all(col in df_classificado.columns for col in ['campaign', 'date', 'datasource']) else []
+        colunas_exportar = colunas_base + colunas_classificadas
+        
+        col_export1, col_export2 = st.columns(2)
+        
+        with col_export1:
+            csv_data = df_classificado[colunas_exportar].to_csv(index=False)
+            st.download_button(
+                label="📥 Baixar Todos os Dados Classificados",
+                data=csv_data,
+                file_name=f"campanhas_classificadas_completo_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+        
+        with col_export2:
+            # Exportar apenas as não classificadas para análise
+            if 'classificado' in df_classificado.columns:
+                nao_classificadas = df_classificado[df_classificado['classificado'] == 'NÃO']
+                if len(nao_classificadas) > 0:
+                    csv_nao_classificadas = nao_classificadas[['campaign']].to_csv(index=False)
+                    st.download_button(
+                        label="📥 Baixar Campanhas Não Classificadas",
+                        data=csv_nao_classificadas,
+                        file_name=f"campanhas_nao_classificadas_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+    
+    # Análise com Gemini sobre padrões
+    if modelo_texto and len(df_classificado) > 0:
+        st.markdown("### 🤖 Análise de Padrões com Gemini")
+        
+        if st.button("🔍 Analisar Padrões de Nomenclatura", use_container_width=True):
+            with st.spinner("Analisando padrões de nomenclatura..."):
+                try:
+                    # Preparar amostra de campanhas
+                    sample_size = min(50, len(df_classificado))
+                    sample_campaigns = df_classificado['campaign'].dropna().sample(sample_size).tolist()
+                    
+                    # Contar clientes identificados
+                    clientes_identificados = []
+                    if 'campaign_cliente' in df_classificado.columns:
+                        clientes_identificados = df_classificado['campaign_cliente'].dropna().unique().tolist()
+                    
+                    prompt = f"""
+                    Analise os seguintes nomes de campanhas de marketing e identifique:
+                    
+                    1. Padrões comuns de nomenclatura
+                    2. Estruturas mais frequentes
+                    3. Componentes principais encontrados
+                    4. Clientes identificados: {', '.join(clientes_identificados[:10]) if clientes_identificados else 'Nenhum'}
+                    5. Problemas de padronização
+                    6. Sugestões para melhorar a classificação automática
+                    
+                    Amostra de nomes de campanhas:
+                    {', '.join([str(c) for c in sample_campaigns])}
+                    
+                    Forneça uma análise detalhada em português com:
+                    - Identificação de padrões estruturais
+                    - Componentes mais comuns (cliente, produto, objetivo, etc.)
+                    - Problemas de inconsistência
+                    - Recomendações para padronização futura
+                    - Sugestões para melhorar a taxonomia
+                    """
+                    
+                    response = modelo_texto.generate_content(prompt)
+                    
+                    st.markdown("### 📄 Análise de Padrões")
+                    st.markdown('<div class="gemini-response">', unsafe_allow_html=True)
+                    st.markdown(response.text)
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    
+                except Exception as e:
+                    st.error(f"Erro na análise: {str(e)[:200]}")
+
+# =============================================================================
 # RODAPÉ
 # =============================================================================
 
@@ -1522,13 +2222,16 @@ st.markdown("---")
 footer_col1, footer_col2, footer_col3 = st.columns(3)
 
 with footer_col1:
-    if not df.empty:
-        st.caption(f"📊 Dados: {len(df):,} registros")
+    if not df_filtrado.empty:
+        st.caption(f"📊 Dados: {len(df_filtrado):,} registros")
+        if st.session_state.filtros_aplicados:
+            filtros_count = len(st.session_state.filtros_aplicados)
+            st.caption(f"🔍 Filtros: {filtros_count} ativos")
 
 with footer_col2:
-    if 'campaign' in df.columns:
+    if 'campaign' in df_filtrado.columns:
         try:
-            num_campaigns = df['campaign'].nunique()
+            num_campaigns = df_filtrado['campaign'].nunique()
             st.caption(f"🎯 Campanhas: {num_campaigns}")
         except:
             st.caption("🎯 Campanhas: Erro")
