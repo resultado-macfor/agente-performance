@@ -23,7 +23,7 @@ except ImportError:
 # Configuração da página
 st.set_page_config(
     layout="wide",
-    page_title="Analytics Platform + Classificador de Campanhas",
+    page_title="Agente Performance",
     page_icon="📊"
 )
 
@@ -164,7 +164,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Título
-st.markdown('<div class="header-gradient"><h1>📊 Analytics Platform + Classificador de Campanhas Multi-Clientes</h1></div>', unsafe_allow_html=True)
+st.markdown('<div class="header-gradient"><h1>Agente Performance</h1></div>', unsafe_allow_html=True)
 
 # =============================================================================
 # CONFIGURAÇÃO GEMINI
