@@ -1,3 +1,4 @@
+# app_completo.py - App Analytics Platform Completo com Classificador Multi-Clientes
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -23,7 +24,7 @@ except ImportError:
 # Configuração da página
 st.set_page_config(
     layout="wide",
-    page_title="Agente Performance",
+    page_title="Analytics Platform + Classificador de Campanhas",
     page_icon="📊"
 )
 
@@ -164,7 +165,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Título
-st.markdown('<div class="header-gradient"><h1>Agente Performance</h1></div>', unsafe_allow_html=True)
+st.markdown('<div class="header-gradient"><h1>📊 Analytics Platform + Classificador de Campanhas Multi-Clientes</h1></div>', unsafe_allow_html=True)
 
 # =============================================================================
 # CONFIGURAÇÃO GEMINI
@@ -372,6 +373,7 @@ def generate_gemini_analysis(df_filtered, analysis_type="overall", user_instruct
         5. **🔍 INSIGHTS ESTRATÉGICOS** (3-5 insights principais)
         6. **🚀 RECOMENDAÇÕES ACIONÁVEIS** (5-7 recomendações)
         7. **📅 PRÓXIMOS PASSOS** (plano de ação)
+
         
         Seja específico, baseado em dados e prático.
         """
@@ -382,6 +384,93 @@ def generate_gemini_analysis(df_filtered, analysis_type="overall", user_instruct
     
     except Exception as e:
         return f"❌ Erro: {str(e)[:200]}"
+
+
+
+def generate_slides_description(gemini_analysis_report, user_instructions=""):
+    """Gera descrição do que colocar em cada slide baseada no relatório Gemini"""
+    
+    if not modelo_texto:
+        return "⚠️ Gemini não configurado."
+    
+    if not gemini_analysis_report or gemini_analysis_report.startswith("❌") or gemini_analysis_report.startswith("⚠️"):
+        return "❌ Nenhuma análise disponível para criar slides."
+    
+    try:
+        prompt = f"""
+        # 📊 DESCRIÇÃO PARA SLIDES DE APRESENTAÇÃO
+        
+        ## RELATÓRIO GEMINI COMPLETO:
+        {gemini_analysis_report}
+        
+        ## INSTRUÇÕES ADICIONAIS:
+        {user_instructions if user_instructions else "Baseie-se no relatório para criar uma descrição do que colocar em cada slide."}
+        
+        ## TAREFA:
+        Com base no relatório Gemini acima, crie uma descrição objetiva do que colocar em cada slide.
+        Crie para 10 slides seguindo esta estrutura:
+        
+        **SLIDE 1 - CAPA**
+        - Título da apresentação
+        - Subtítulo
+        - Data/período analisado
+        - Nome do apresentador
+        
+        **SLIDE 2 - AGENDA**
+        - Lista dos tópicos que serão apresentados
+        - Objetivo da apresentação
+        
+        **SLIDE 3 - METODOLOGIA E CONTEXTO**
+        - Fonte dos dados
+        - Período analisado
+        - Escopo da análise
+        
+        **SLIDE 4 - RESUMO EXECUTIVO**
+        - Principais conclusões do relatório
+        - Recomendação principal
+        
+        **SLIDE 5 - PERFORMANCE GERAL**
+        - KPIs principais identificados
+        - Principais destaques
+        
+        **SLIDE 6 - ANÁLISE DE CAMPANHAS**
+        - Campanhas com melhor desempenho
+        - Campanhas com pior desempenho
+        - Insights principais
+        
+        **SLIDE 7 - ANÁLISE FINANCEIRA**
+        - Investimento total
+        - ROI/ROAS
+        - Eficiência identificada
+        
+        **SLIDE 8 - INSIGHTS ESTRATÉGICOS**
+        - 3-5 insights principais do relatório
+        - Oportunidades identificadas
+        
+        **SLIDE 9 - RECOMENDAÇÕES**
+        - Recomendações prioritárias do relatório
+        - Plano de ação sugerido
+        
+        **SLIDE 10 - PRÓXIMOS PASSOS**
+        - Ações imediatas
+        - Métricas de acompanhamento
+        - Encerramento
+        
+        ## FORMATO DE SAÍDA:
+        Para cada slide, forneça APENAS:
+        1. O título do slide
+        2. Lista com 3-5 pontos do que colocar no slide
+        
+        Seja DIRETO e OBJETIVO. Use apenas informações do relatório fornecido.
+        """
+        
+        with st.spinner("🤖 Gerando descrição dos slides..."):
+            response = modelo_texto.generate_content(prompt)
+            return response.text
+    
+    except Exception as e:
+        return f"❌ Erro ao gerar slides: {str(e)[:200]}"
+
 
 # =============================================================================
 # CONEXÃO BIGQUERY
@@ -468,7 +557,7 @@ def load_all_columns_data(_client, data_inicio=None, data_fim=None, data_sources
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
         
-        query += f" ORDER BY date DESC LIMIT {limit}"
+        query += f" ORDER BY date DESC"
         
         df = _client.query(query).to_dataframe()
         
@@ -518,7 +607,7 @@ def load_all_columns_data(_client, data_inicio=None, data_fim=None, data_sources
             df['cliente_identificado'] = "Desconhecido"
             if filtro_cliente != "Todos":
                 st.warning("⚠️ Coluna 'account_name' não encontrada. Não é possível filtrar por cliente.")
-        
+        df = df.head(limit)
         # Aplicar classificação automática de campanhas
         df_classificado = classificar_campanhas_multi_cliente(df)
         
@@ -1053,6 +1142,8 @@ if 'relatorio_classificacao' not in st.session_state:
     st.session_state.relatorio_classificacao = None
 if 'filtros_aplicados' not in st.session_state:
     st.session_state.filtros_aplicados = {}
+if 'slides_description' not in st.session_state:
+    st.session_state.slides_description = None
 
 # Sidebar
 with st.sidebar:
@@ -1612,7 +1703,6 @@ with tab2:
             except:
                 st.dataframe(stats_df, use_container_width=True)
             
-            # Histogramas - CORREÇÃO AQUI: Adicionar chaves únicas
             if len(colunas_selecionadas) > 0:
                 st.subheader("📈 Distribuições")
                 
@@ -1621,20 +1711,17 @@ with tab2:
                 
                 for idx, col in enumerate(colunas_selecionadas[:num_cols*3]):
                     with cols_vis[idx % num_cols]:
-                        # Usar container para garantir ID único
-                        container = st.container()
-                        with container:
-                            fig = criar_visualizacao_coluna(df_filtrado, col)
-                            if fig:
-                                # Adicionar key única para cada gráfico
-                                st.plotly_chart(
-                                    fig, 
-                                    use_container_width=True,
-                                    key=f"histogram_{col}_{idx}"
-                                )
-                            else:
-                                st.info(f"Não foi possível criar gráfico para {col}")
-            
+                        # Criar gráfico sem mostrar mensagem de erro
+                        fig = criar_visualizacao_coluna(df_filtrado, col)
+                        if fig is not None and fig:
+                            # Adicionar key única para cada gráfico
+                            st.plotly_chart(
+                                fig, 
+                                use_container_width=True,
+                                key=f"histogram_{col}_{idx}"
+                            )
+
+
             # Correlações - CORREÇÃO: Adicionar key única
             if len(colunas_selecionadas) >= 2:
                 st.subheader("🔥 Correlações")
@@ -2229,7 +2316,7 @@ with tab6:
         st.markdown("### 📄 Relatório de Análise")
         
         # Ações
-        col_actions1, col_actions2 = st.columns(2)
+        col_actions1, col_actions2, col_actions3 = st.columns(3)
         
         with col_actions1:
             analysis_text = st.session_state.gemini_analysis
@@ -2243,15 +2330,48 @@ with tab6:
             )
         
         with col_actions2:
+            if st.button("🎬 Gerar Descrição dos Slides", use_container_width=True, type="secondary", key="generate_slides_tab6"):
+                with st.spinner("Gerando descrição para slides..."):
+                    # Gerar descrição dos slides baseada no relatório
+                    slides_desc = generate_slides_description(
+                        st.session_state.gemini_analysis,
+                        user_instructions  # Reutilizar instruções da análise
+                    )
+                    
+                    st.session_state.slides_description = slides_desc
+                    st.success("✅ Descrição dos slides gerada!")
+                    st.rerun()
+        
+        with col_actions3:
             if st.button("🔄 Nova Análise", use_container_width=True, key="new_analysis_tab6"):
                 st.session_state.gemini_analysis = None
+                st.session_state.slides_description = None
                 st.rerun()
-        
-        # Mostrar análise
+    
+        # Mostrar análise Gemini
         st.markdown('<div class="gemini-response">', unsafe_allow_html=True)
         st.markdown(st.session_state.gemini_analysis)
         st.markdown('</div>', unsafe_allow_html=True)
-    
+        
+        if st.session_state.slides_description:
+            st.markdown("---")
+            st.markdown("### 🎬 Descrição para Slides")
+            
+            # Botão para download
+            slides_text = st.session_state.slides_description
+            st.download_button(
+                label="📥 Baixar Descrição dos Slides",
+                data=slides_text,
+                file_name=f"slides_descricao_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                mime="text/plain",
+                use_container_width=True,
+                key="download_slides_tab6"
+            )
+            
+            # Mostrar descrição dos slides
+            st.markdown('<div class="gemini-response">', unsafe_allow_html=True)
+            st.markdown(st.session_state.slides_description)
+            st.markdown('</div>', unsafe_allow_html=True)
     else:
         # Instruções
         st.info("""
