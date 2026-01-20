@@ -1,4 +1,3 @@
-# app_completo.py - App Analytics Platform Completo com Classificador Multi-Clientes
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -443,12 +442,14 @@ def get_bigquery_client():
         st.error(f"❌ Erro na conexão: {str(e)}")
         return None
 
+        
 @st.cache_data(ttl=3600)
-def load_all_columns_data(_client, data_inicio=None, data_fim=None, data_sources=None, limit=50000):
-    """Carrega TODAS as colunas"""
+def load_all_columns_data(_client, data_inicio=None, data_fim=None, data_sources=None, filtro_cliente="Todos", limit=50000):
+    """Carrega TODAS as colunas e identifica clientes pelo account_name"""
     try:
         st.info("🔍 Carregando dados...")
         
+        # Primeiro, carregar todos os dados sem filtro de cliente
         query = """
         SELECT *
         FROM `macfor-media-flow.ads.app_view_campaigns`
@@ -479,9 +480,49 @@ def load_all_columns_data(_client, data_inicio=None, data_fim=None, data_sources
         if 'date' in df.columns:
             df['date'] = pd.to_datetime(df['date'], errors='coerce')
         
-        st.success(f"✅ {len(df):,} registros, {len(df.columns)} colunas")
+        # =====================================================================
+        # FUNÇÃO PARA IDENTIFICAR CLIENTE POR ACCOUNT_NAME
+        # =====================================================================
+        def identificar_cliente_por_account_name(account_name):
+            """Identifica o cliente com base no nome da conta"""
+            if pd.isna(account_name):
+                return "Não Syngenta"
+            
+            account_str = str(account_name).upper()
+            
+            # Lista de marcas do grupo Syngenta
+            marcas_syngenta = [
+                "SYNGENTA", "NIDERA", "GOLDEN HARVEST", "GOLDENHARVEST",
+                "NK SEEDS", "GARST", "HILLESHOG", "ENOGEN"
+            ]
+            
+            for marca in marcas_syngenta:
+                if marca in account_str:
+                    return "Syngenta"
+            
+            # Se não for nenhuma marca Syngenta, classificar como "Não Syngenta"
+            return "Não Syngenta"
         
-        return df
+        # Aplicar identificação de cliente se existir a coluna account_name
+        if 'account_name' in df.columns:
+            df['cliente_identificado'] = df['account_name'].apply(identificar_cliente_por_account_name)
+            
+            # Aplicar filtro de cliente
+            if filtro_cliente != "Todos":
+                if filtro_cliente == "Syngenta":
+                    df = df[df['cliente_identificado'] == 'Syngenta'].copy()
+                elif filtro_cliente == "Não Syngenta":
+                    df = df[df['cliente_identificado'] == 'Não Syngenta'].copy()
+        else:
+            # Se não tiver account_name, não podemos identificar
+            df['cliente_identificado'] = "Desconhecido"
+            if filtro_cliente != "Todos":
+                st.warning("⚠️ Coluna 'account_name' não encontrada. Não é possível filtrar por cliente.")
+        
+        # Aplicar classificação automática de campanhas
+        df_classificado = classificar_campanhas_multi_cliente(df)
+        
+        return df_classificado
     
     except Exception as e:
         st.error(f"Erro: {str(e)}")
@@ -767,8 +808,62 @@ def extrair_categorias_campanha(nome_campanha):
         
         # Marcas/Produtos genéricos
         'produto': [
-            'PRODUTO_A', 'PRODUTO_B', 'PRODUTO_C', 'LINE_A', 'LINE_B',
-            'BRAND_X', 'BRAND_Y', 'SERVICO_1', 'SERVICO_2'
+            'ACTARA','ALADE-MITRION',
+            'AMISTAR','AMISTAR_TOP',
+            'AMPLIGO','ARVATICO',
+            'AVICTA_COMPLETO','AXIAL',
+            'BRAVONIL','BRAVONIL_TOP',
+            'BRAVONIL720','CALARIS',
+            'CALARIS_MA','CALIPEN_SC',
+            'CLARIVA_SKY','CRUISER_ADVANCED',
+            'CRUISER_OPTI',
+            'CRUISER_TURBO','CURYOM',
+            'CYPRESS','DUAL_GOLD',
+            'DURIVO','EDDUS',
+            'ELATUS',
+            'ELESTAL_NEO',
+            'ENGEO_PLENO_S','FORTENZA',
+            'FORTENZA_DUO',
+            'FORTENZA_ELITE','FORTENZA_VIP_TURBO',
+            'GROVER',
+            'INFLUX',
+            'INSTIVO','INVICT',
+            'JOINER',
+            'MAXIM_QUATTRO','MINECTO_PRO',
+            'MIRAVIS','MIRAVIS_DUO',
+            'MIRAVIS_PRO',
+            'MODDUS','NEMATOIDES',
+            'PERGADO_MZ','PLINAZOLIN',
+            'POLYTRIN','PRIORI_TOP',
+            'PRIORI_XTRA',
+            'PROCLAIM','REBRON',
+            'REGLONE',
+            'REVUS_OPTI',
+            'RIDOMIL_GOLD','SCORE_FLEXI',
+            'SPONTA','VERDADERO',
+            'VERDAVIS','VOLIAM_FLEXI',
+            'VOLIAM_TARGO','CERTANO',
+            'RIZOLIQ_LLI','RIZOLIQ_UHC',
+            'ALADE',
+            'MITRION',
+            'POLO_500_SC',
+            'ADEPIDYN',
+            'ORONDIS_FLEXI','SCORE',
+            'ORONDIS_ULTRA','INZAK_ZEON',
+            'REVERB','MEGAFOL',
+            'AEVO',
+            'YIELDON','FRONDEO',
+            'FLEXSTAR_GT',
+            'ELESTAL','FANTON',
+            'JOINER_PRO','INVENCIS',
+            'SEEKER','CRESTIVO',
+            'VIVA','RIZODERMA',
+            'RIZOFOS',
+            'SIGNUM','NETURE',
+            'MIRAVIS_XTRA','VANIVA',
+            'CRUISER_OPTI-CRUISER_ADVANCED',
+            'VICTRATO_GOLD',
+            'BOUNDARY_EC','VICTRATO'
         ]
     }
     
@@ -969,8 +1064,16 @@ with st.sidebar:
             client = get_bigquery_client()
             if client:
                 st.success("✅ Conexão OK!")
+
+    st.subheader("👥 Filtro por Cliente")
+    filtro_cliente = st.radio(
+        "Selecione o Cliente:",
+        ["Todos", "Syngenta", "Não Syngenta"],
+        index=0
+    )
     
     # Data sources
+    st.subheader("📱 Data Sources")    
     data_sources_opcoes = ["facebook", "google ads", "tiktok", "linkedin", "twitter", "pinterest"]
     selected_sources = st.multiselect(
         "Data Sources",
@@ -1029,6 +1132,7 @@ with st.sidebar:
                     data_inicio=data_inicio,
                     data_fim=data_fim,
                     data_sources=selected_sources,
+                    filtro_cliente=filtro_cliente,
                     limit=limite
                 )
                 
@@ -1069,41 +1173,116 @@ if df.empty:
 st.markdown("## 🔍 Filtros Avançados por Categoria de Campanha")
 
 # Criar colunas para filtros
-filtro_col1, filtro_col2, filtro_col3 = st.columns(3)
+filtro_col1, filtro_col2, filtro_col3, filtro_col4 = st.columns(4)
+
+
 
 with filtro_col1:
-    # Filtro por Cliente
-    if 'campaign_cliente' in df_classificado.columns:
-        clientes = sorted(df_classificado['campaign_cliente'].dropna().unique())
-        cliente_selecionado = st.selectbox(
-            "👥 Cliente:",
-            options=['Todos'] + list(clientes)
-        )
-        if cliente_selecionado != 'Todos':
-            st.session_state.filtros_aplicados['campaign_cliente'] = cliente_selecionado
-        elif 'campaign_cliente' in st.session_state.filtros_aplicados:
-            del st.session_state.filtros_aplicados['campaign_cliente']
-    
-    # Filtro por Iniciativa
-    if 'campaign_iniciativa' in df_classificado.columns:
-        iniciativas = sorted(df_classificado['campaign_iniciativa'].dropna().unique())
-        iniciativa_selecionada = st.selectbox(
-            "🚀 Iniciativa:",
-            options=['Todas'] + list(iniciativas)
-        )
-        if iniciativa_selecionada != 'Todas':
-            st.session_state.filtros_aplicados['campaign_iniciativa'] = iniciativa_selecionada
-        elif 'campaign_iniciativa' in st.session_state.filtros_aplicados:
-            del st.session_state.filtros_aplicados['campaign_iniciativa']
-
-with filtro_col2:
-    # Filtro por Produto
+    # Filtro por Produto 
     if 'campaign_produto' in df_classificado.columns:
-        produtos = sorted(df_classificado['campaign_produto'].dropna().unique())
+        # Lista completa de produtos
+        todos_produtos = [
+            'Todos', 
+            'ACTARA',
+            'ALADE-MITRION',
+            'AMISTAR',
+            'AMISTAR_TOP',
+            'AMPLIGO',
+            'ARVATICO',
+            'AVICTA_COMPLETO',
+            'AXIAL',
+            'BRAVONIL',
+            'BRAVONIL_TOP',
+            'BRAVONIL720',
+            'CALARIS',
+            'CALARIS_MA',
+            'CALIPEN_SC',
+            'CLARIVA_SKY',
+            'CRUISER_ADVANCED',
+            'CRUISER_OPTI',
+            'CRUISER_TURBO',
+            'CURYOM',
+            'CYPRESS',
+            'DUAL_GOLD',
+            'DURIVO',
+            'EDDUS',
+            'ELATUS',
+            'ELESTAL_NEO',
+            'ENGEO_PLENO_S',
+            'FORTENZA',
+            'FORTENZA_DUO',
+            'FORTENZA_ELITE',
+            'FORTENZA_VIP_TURBO',
+            'GROVER',
+            'INFLUX',
+            'INSTIVO',
+            'INVICT',
+            'JOINER',
+            'MAXIM_QUATTRO',
+            'MINECTO_PRO',
+            'MIRAVIS',
+            'MIRAVIS_DUO',
+            'MIRAVIS_PRO',
+            'MODDUS',
+            'NEMATOIDES',
+            'PERGADO_MZ',
+            'PLINAZOLIN',
+            'POLYTRIN',
+            'PRIORI_TOP',
+            'PRIORI_XTRA',
+            'PROCLAIM',
+            'REBRON',
+            'REGLONE',
+            'REVUS_OPTI',
+            'RIDOMIL_GOLD',
+            'SCORE_FLEXI',
+            'SPONTA',
+            'VERDADERO',
+            'VERDAVIS',
+            'VOLIAM_FLEXI',
+            'VOLIAM_TARGO',
+            'CERTANO',
+            'RIZOLIQ_LLI',
+            'RIZOLIQ_UHC',
+            'ALADE',
+            'MITRION',
+            'POLO_500_SC',
+            'ADEPIDYN',
+            'ORONDIS_FLEXI',
+            'SCORE',
+            'ORONDIS_ULTRA',
+            'INZAK_ZEON',
+            'REVERB',
+            'MEGAFOL',
+            'AEVO',
+            'YIELDON',
+            'FRONDEO',
+            'FLEXSTAR_GT',
+            'ELESTAL',
+            'FANTON',
+            'JOINER_PRO',
+            'INVENCIS',
+            'SEEKER',
+            'CRESTIVO',
+            'VIVA',
+            'RIZODERMA',
+            'RIZOFOS',
+            'SIGNUM',
+            'NETURE',
+            'MIRAVIS_XTRA',
+            'VANIVA',
+            'CRUISER_OPTI-CRUISER_ADVANCED',
+            'VICTRATO_GOLD',
+            'BOUNDARY_EC',
+            'VICTRATO'
+        ]
+        
         produto_selecionado = st.selectbox(
             "📦 Produto:",
-            options=['Todos'] + list(produtos)
+            options=todos_produtos,
+            key="produto_selectbox"
         )
+        
         if produto_selecionado != 'Todos':
             st.session_state.filtros_aplicados['campaign_produto'] = produto_selecionado
         elif 'campaign_produto' in st.session_state.filtros_aplicados:
@@ -1121,7 +1300,7 @@ with filtro_col2:
         elif 'campaign_cultura' in st.session_state.filtros_aplicados:
             del st.session_state.filtros_aplicados['campaign_cultura']
 
-with filtro_col3:
+with filtro_col2:
     # Filtro por Tipo de Campanha
     if 'campaign_tipo_campanha' in df_classificado.columns:
         tipos = sorted(df_classificado['campaign_tipo_campanha'].dropna().unique())
@@ -1146,10 +1325,8 @@ with filtro_col3:
         elif 'campaign_objetivo' in st.session_state.filtros_aplicados:
             del st.session_state.filtros_aplicados['campaign_objetivo']
 
-# Filtros adicionais em uma nova linha
-filtro_col4, filtro_col5, filtro_col6 = st.columns(3)
 
-with filtro_col4:
+with filtro_col3:
     # Filtro por Etapa do Funil
     if 'campaign_etapa_funil' in df_classificado.columns:
         etapas = sorted(df_classificado['campaign_etapa_funil'].dropna().unique())
@@ -1161,8 +1338,21 @@ with filtro_col4:
             st.session_state.filtros_aplicados['campaign_etapa_funil'] = etapa_selecionada
         elif 'campaign_etapa_funil' in st.session_state.filtros_aplicados:
             del st.session_state.filtros_aplicados['campaign_etapa_funil']
+    
+    # Filtro por Iniciativa
+    if 'campaign_iniciativa' in df_classificado.columns:
+        iniciativas = sorted(df_classificado['campaign_iniciativa'].dropna().unique())
+        iniciativa_selecionada = st.selectbox(
+            "🚀 Iniciativa:",
+            options=['Todas'] + list(iniciativas)
+        )
+        if iniciativa_selecionada != 'Todas':
+            st.session_state.filtros_aplicados['campaign_iniciativa'] = iniciativa_selecionada
+        elif 'campaign_iniciativa' in st.session_state.filtros_aplicados:
+            del st.session_state.filtros_aplicados['campaign_iniciativa']
 
-with filtro_col5:
+
+with filtro_col4:
     # Filtro por Plataforma
     if 'campaign_plataforma' in df_classificado.columns:
         plataformas = sorted(df_classificado['campaign_plataforma'].dropna().unique())
@@ -1175,7 +1365,6 @@ with filtro_col5:
         elif 'campaign_plataforma' in st.session_state.filtros_aplicados:
             del st.session_state.filtros_aplicados['campaign_plataforma']
 
-with filtro_col6:
     # Filtro por Agência
     if 'campaign_agencia' in df_classificado.columns:
         agencias = sorted(df_classificado['campaign_agencia'].dropna().unique())
@@ -1200,6 +1389,25 @@ with col_btn2:
         st.session_state.filtros_aplicados = {}
         st.rerun()
 
+
+with col_btn3:
+    # Adicionar campo de busca por nome de campanha
+    busca_campanha = st.text_input(
+        "",
+        placeholder="Digite parte do nome da campanha...",
+        key="busca_campanha_input",
+        label_visibility="collapsed"  # Esconde completamente o label
+    )
+    
+    # Armazenar busca no session_state
+    if busca_campanha:
+        st.session_state.busca_campanha = busca_campanha
+    elif 'busca_campanha' not in st.session_state:
+        st.session_state.busca_campanha = ""
+
+
+
+
 # Aplicar filtros aos dados
 df_filtrado = df_classificado.copy()
 if st.session_state.filtros_aplicados:
@@ -1207,13 +1415,40 @@ if st.session_state.filtros_aplicados:
         if coluna in df_filtrado.columns:
             df_filtrado = df_filtrado[df_filtrado[coluna] == valor]
 
-# Mostrar status dos filtros
+
+# Depois aplicar busca por nome da campanha (se existir)
+if 'busca_campanha' in st.session_state and st.session_state.busca_campanha:
+    busca_termo = st.session_state.busca_campanha.lower().strip()
+    if busca_termo and 'campaign' in df_filtrado.columns:
+        # Buscar em qualquer parte do nome da campanha (case insensitive)
+        df_filtrado = df_filtrado[
+            df_filtrado['campaign'].astype(str).str.lower().str.contains(busca_termo, na=False)
+        ]
+
+# Mostrar status dos filtros e busca
+filtros_ativos = []
+
+
 if st.session_state.filtros_aplicados:
+    filtros_ativos.extend([f"{k.replace('campaign_', '')}: {v}" for k, v in st.session_state.filtros_aplicados.items()])
+
+if 'busca_campanha' in st.session_state and st.session_state.busca_campanha:
+    filtros_ativos.append(f"Busca: '{st.session_state.busca_campanha}'")
+
+if filtros_ativos:
     st.markdown(f"### 📊 Dados Filtrados: {len(df_filtrado):,} registros")
-    filtros_texto = " | ".join([f"{k.replace('campaign_', '')}: {v}" for k, v in st.session_state.filtros_aplicados.items()])
+    filtros_texto = " | ".join(filtros_ativos)
     st.info(f"**Filtros ativos:** {filtros_texto}")
+    
+    # Mostrar resumo dos filtros em badges
+    st.markdown("**Filtros aplicados:**")
+    col_badges = st.columns(min(8, len(filtros_ativos)))
+    for idx, filtro in enumerate(filtros_ativos):
+        with col_badges[idx % 8]:
+            st.markdown(f'<span style="background:#e0f2fe; padding:5px 10px; border-radius:10px; margin:2px; font-size:0.8em">{filtro}</span>', unsafe_allow_html=True)
 else:
     st.markdown(f"### 📊 Dados Completos: {len(df_filtrado):,} registros")
+    st.info("ℹ️ Nenhum filtro aplicado. Todos os dados estão visíveis.")
 
 # Abas principais (usando df_filtrado em vez de df)
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
@@ -1377,7 +1612,7 @@ with tab2:
             except:
                 st.dataframe(stats_df, use_container_width=True)
             
-            # Histogramas
+            # Histogramas - CORREÇÃO AQUI: Adicionar chaves únicas
             if len(colunas_selecionadas) > 0:
                 st.subheader("📈 Distribuições")
                 
@@ -1386,13 +1621,21 @@ with tab2:
                 
                 for idx, col in enumerate(colunas_selecionadas[:num_cols*3]):
                     with cols_vis[idx % num_cols]:
-                        fig = criar_visualizacao_coluna(df_filtrado, col)
-                        if fig:
-                            st.plotly_chart(fig, use_container_width=True)
-                        else:
-                            st.info(f"Não foi possível criar gráfico para {col}")
+                        # Usar container para garantir ID único
+                        container = st.container()
+                        with container:
+                            fig = criar_visualizacao_coluna(df_filtrado, col)
+                            if fig:
+                                # Adicionar key única para cada gráfico
+                                st.plotly_chart(
+                                    fig, 
+                                    use_container_width=True,
+                                    key=f"histogram_{col}_{idx}"
+                                )
+                            else:
+                                st.info(f"Não foi possível criar gráfico para {col}")
             
-            # Correlações
+            # Correlações - CORREÇÃO: Adicionar key única
             if len(colunas_selecionadas) >= 2:
                 st.subheader("🔥 Correlações")
                 
@@ -1408,7 +1651,11 @@ with tab2:
                         title="Correlações"
                     )
                     fig_corr.update_layout(height=600)
-                    st.plotly_chart(fig_corr, use_container_width=True)
+                    st.plotly_chart(
+                        fig_corr, 
+                        use_container_width=True,
+                        key="correlation_matrix_tab2"
+                    )
                     
                     # Top correlações
                     st.subheader("🔗 Principais Correlações")
@@ -1428,7 +1675,11 @@ with tab2:
                     if correlacoes_fortes:
                         correlacoes_fortes.sort(key=lambda x: abs(x['Correlação']), reverse=True)
                         df_corr = pd.DataFrame(correlacoes_fortes[:20])
-                        st.dataframe(df_corr, use_container_width=True)
+                        st.dataframe(
+                            df_corr, 
+                            use_container_width=True,
+                            key="strong_correlations_table"
+                        )
                     else:
                         st.info("Sem correlações fortes (> 0.3)")
                         
@@ -1438,7 +1689,6 @@ with tab2:
 # =============================================================================
 # TAB 3: EXPLORAR COLUNAS (COM DADOS FILTRADOS)
 # =============================================================================
-
 with tab3:
     st.header("🔍 Explorar Colunas Individualmente")
     
@@ -1515,8 +1765,7 @@ with tab3:
                     )
                 except:
                     st.error("Erro ao calcular distribuição")
-
-# =============================================================================
+#=============================================================================
 # TAB 4: VISUALIZAR DADOS (COM DADOS FILTRADOS)
 # =============================================================================
 
