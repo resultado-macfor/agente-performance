@@ -407,61 +407,26 @@ def generate_slides_description(gemini_analysis_report, user_instructions=""):
         {user_instructions if user_instructions else "Baseie-se no relatório para criar uma descrição do que colocar em cada slide."}
         
         ## TAREFA:
-        Com base no relatório Gemini acima, crie uma descrição objetiva do que colocar em cada slide.
-        Crie para 10 slides seguindo esta estrutura:
-        
-        **SLIDE 1 - CAPA**
-        - Título da apresentação
-        - Subtítulo
-        - Data/período analisado
-        - Nome do apresentador
-        
-        **SLIDE 2 - AGENDA**
-        - Lista dos tópicos que serão apresentados
-        - Objetivo da apresentação
-        
-        **SLIDE 3 - METODOLOGIA E CONTEXTO**
-        - Fonte dos dados
-        - Período analisado
-        - Escopo da análise
-        
-        **SLIDE 4 - RESUMO EXECUTIVO**
-        - Principais conclusões do relatório
-        - Recomendação principal
-        
-        **SLIDE 5 - PERFORMANCE GERAL**
-        - KPIs principais identificados
-        - Principais destaques
-        
-        **SLIDE 6 - ANÁLISE DE CAMPANHAS**
-        - Campanhas com melhor desempenho
-        - Campanhas com pior desempenho
-        - Insights principais
-        
-        **SLIDE 7 - ANÁLISE FINANCEIRA**
-        - Investimento total
-        - ROI/ROAS
-        - Eficiência identificada
-        
-        **SLIDE 8 - INSIGHTS ESTRATÉGICOS**
-        - 3-5 insights principais do relatório
-        - Oportunidades identificadas
-        
-        **SLIDE 9 - RECOMENDAÇÕES**
-        - Recomendações prioritárias do relatório
-        - Plano de ação sugerido
-        
-        **SLIDE 10 - PRÓXIMOS PASSOS**
-        - Ações imediatas
-        - Métricas de acompanhamento
-        - Encerramento
-        
-        ## FORMATO DE SAÍDA:
-        Para cada slide, forneça APENAS:
-        1. O título do slide
-        2. Lista com 3-5 pontos do que colocar no slide
-        
-        Seja DIRETO e OBJETIVO. Use apenas informações do relatório fornecido.
+        Com base no relatório Gemini acima, crie uma estrutura de relatório em slides (descrição em formato de texto de como cada slide deve vir) de performance de campanha com:
+
+ARQUITETURA DA APRESENTAÇÃO:
+1. CAPA: Esta é uma análise da estrutura lógica e do design visual do slide apresentado, focada em sua arquit
+2. AGENDA/CONTEXTUALIZAÇÃO: Slide introdutório
+3. SLIDES DE DETALHAMENTO: [Descreva padrão identificado]
+4. SLIDES ANALÍTICOS: [Descreva padrão identificado]
+5. CONCLUSÕES/RECOMENDAÇÕES: Slide final com insights
+
+PADRÕES ESTRUTURAIS IDENTIFICADOS:
+- Hierarquia visual: [Descrição da hierarquia]
+- Elementos recorrentes: [Lista de elementos]
+- Densidade informacional: [Padrão identificado]
+
+DIRETRIZES PARA RELATÓRIO DE PERFORMANCE:
+1. Para cada slide, mantenha a estrutura de: [Título claro] + [Dados chave] + [Visualização apropriada] + [Insight breve]
+2. Use a progressão lógica: Contexto → Métricas → Análise → Insights → Recomendações
+3. Aplique consistência visual em: cores, tipografia, layout de gráficos
+
+Gere uma apresentação completa aplicando ESTA ESTRUTURA ESPECÍFICA a um relatório de performance de campanha digital.
         """
         
         with st.spinner("🤖 Gerando descrição dos slides..."):
