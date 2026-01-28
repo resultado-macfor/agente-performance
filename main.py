@@ -12,6 +12,7 @@ import plotly.graph_objects as go
 import plotly.figure_factory as ff
 import io
 import re
+import os
 
 # Tentar importar Gemini
 try:
@@ -503,14 +504,12 @@ def load_all_columns_data(_client, data_inicio=None, data_fim=None, data_sources
     try:
         st.info("🔍 Carregando dados...")
         
-        # Primeiro, carregar todos os dados sem filtro de cliente
         query = """
         SELECT *
         FROM `macfor-media-flow.ads.app_view_campaigns`
         """
         
         conditions = []
-        
         if data_inicio:
             conditions.append(f"DATE(date) >= DATE('{data_inicio}')")
         if data_fim:
@@ -529,51 +528,37 @@ def load_all_columns_data(_client, data_inicio=None, data_fim=None, data_sources
         if df.empty:
             st.warning("Nenhum dado encontrado")
             return pd.DataFrame()
-        
-        # Garantir que a coluna date é datetime
+
         if 'date' in df.columns:
             df['date'] = pd.to_datetime(df['date'], errors='coerce')
         
         # =====================================================================
-        # FUNÇÃO PARA IDENTIFICAR CLIENTE POR ACCOUNT_NAME
+        # FUNÇÃO ATUALIZADA PARA IDENTIFICAR CLIENTE
         # =====================================================================
         def identificar_cliente_por_account_name(account_name):
-            """Identifica o cliente com base no nome da conta"""
             if pd.isna(account_name):
-                return "Não Syngenta"
+                return "Outros"
             
-            account_str = str(account_name).upper()
+            account_str = str(account_name).strip()
+            account_upper = account_str.upper()
             
-            # Lista de marcas do grupo Syngenta
-            marcas_syngenta = [
-                "SYNGENTA", "NIDERA", "GOLDEN HARVEST", "GOLDENHARVEST",
-                "NK SEEDS", "GARST", "HILLESHOG", "ENOGEN"
-            ]
+            # Regra Especial: Agrupamento Syngenta
+            if "SYNGENTA" in account_upper:
+                return "Syngenta"
             
-            for marca in marcas_syngenta:
-                if marca in account_str:
-                    return "Syngenta"
-            
-            # Se não for nenhuma marca Syngenta, classificar como "Não Syngenta"
-            return "Não Syngenta"
+            # Retorna o nome exato para os outros (ou você pode mapear nomes específicos aqui)
+            return account_str
         
-        # Aplicar identificação de cliente se existir a coluna account_name
         if 'account_name' in df.columns:
             df['cliente_identificado'] = df['account_name'].apply(identificar_cliente_por_account_name)
             
-            # Aplicar filtro de cliente
+            # Aplicar filtro de cliente baseado no dropdown da sidebar
             if filtro_cliente != "Todos":
-                if filtro_cliente == "Syngenta":
-                    df = df[df['cliente_identificado'] == 'Syngenta'].copy()
-                elif filtro_cliente == "Não Syngenta":
-                    df = df[df['cliente_identificado'] == 'Não Syngenta'].copy()
+                df = df[df['cliente_identificado'] == filtro_cliente].copy()
         else:
-            # Se não tiver account_name, não podemos identificar
             df['cliente_identificado'] = "Desconhecido"
-            if filtro_cliente != "Todos":
-                st.warning("⚠️ Coluna 'account_name' não encontrada. Não é possível filtrar por cliente.")
+            
         df = df.head(limit)
-        # Aplicar classificação automática de campanhas
         df_classificado = classificar_campanhas_multi_cliente(df)
         
         return df_classificado
@@ -1122,9 +1107,19 @@ with st.sidebar:
                 st.success("✅ Conexão OK!")
 
     st.subheader("👥 Filtro por Cliente")
-    filtro_cliente = st.radio(
+    opcoes_clientes = [
+        "Todos", 
+        "Syngenta", 
+        "Golden Harvest Brasil", 
+        "Nidera (oficial)", 
+        "NK Seeds (Oficial - Lab)", 
+        "EuroChem Fertilizantes Tocantins", 
+        "Grupo Vittia"
+    ]
+    
+    filtro_cliente = st.selectbox(
         "Selecione o Cliente:",
-        ["Todos", "Syngenta", "Não Syngenta"],
+        options=opcoes_clientes,
         index=0
     )
     
