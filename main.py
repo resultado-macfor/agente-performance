@@ -29,6 +29,79 @@ st.set_page_config(
     page_icon="📊"
 )
 
+# Verificar se o usuário já está autenticado
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+# Se não estiver autenticado, mostrar tela de login
+if not st.session_state.authenticated:
+    st.markdown("""
+    <style>
+        .login-container {
+            max-width: 400px;
+            margin: 0 auto;
+            padding: 40px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .login-title {
+            color: #4f46e5;
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .login-subtitle {
+            color: #6b7280;
+            margin-bottom: 30px;
+        }
+        .stTextInput > div > div > input {
+            border-radius: 10px;
+            border: 2px solid #e5e7eb;
+            padding: 12px;
+            font-size: 16px;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    st.markdown('<div class="login-container">', unsafe_allow_html=True)
+    st.markdown('<div class="login-title">🔒 Agente Performance</div>', unsafe_allow_html=True)
+    st.markdown('<div class="login-subtitle">Acesso Restrito à Equipe</div>', unsafe_allow_html=True)
+    
+    # Campo para senha
+    senha_input = st.text_input("Digite a senha de acesso:", type="password", key="senha_input")
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("🔓 Acessar", use_container_width=True, type="primary"):
+            # Obter a senha do ambiente
+            senha_correta = os.getenv('SENHA_PER')
+            
+            if not senha_correta:
+                st.error("❌ Sistema não configurado. Contate o administrador.")
+            elif senha_input == senha_correta:
+                st.session_state.authenticated = True
+                st.success("✅ Acesso concedido!")
+                st.rerun()
+            else:
+                st.error("❌ Senha incorreta. Tente novamente.")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Informações de ajuda
+    with st.expander("🆘 Precisa de ajuda?"):
+        st.info("""
+        **Problemas de acesso:**
+        1. Verifique se digitou a senha corretamente
+        2. A senha é case-sensitive
+        3. Contate o administrador se esqueceu a senha
+        
+        **Suporte técnico:** equipe@empresa.com
+        """)
+    
+    st.stop()  # Para a execução aqui se não estiver autenticado
+
 # CSS personalizado
 st.markdown("""
 <style>
