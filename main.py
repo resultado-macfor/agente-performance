@@ -191,6 +191,53 @@ st.markdown("""
         padding: 15px;
         margin: 10px 0;
     }
+    .mom-analysis {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 25px;
+        margin: 20px 0;
+        box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+    }
+    .yoy-scenario {
+        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 25px;
+        margin: 20px 0;
+        box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+    }
+    .pasted-data {
+        background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 25px;
+        margin: 20px 0;
+        box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+    }
+    .comparison-table {
+        background: white;
+        border-radius: 8px;
+        padding: 15px;
+        margin: 10px 0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        border: 1px solid #e2e8f0;
+    }
+    .platform-card {
+        background: #f0f9ff;
+        border-radius: 10px;
+        padding: 15px;
+        margin: 10px;
+        border-left: 4px solid #3b82f6;
+    }
+    .yoy-metric {
+        background: white;
+        border-radius: 10px;
+        padding: 15px;
+        margin: 10px 0;
+        border: 2px solid #e2e8f0;
+        box-shadow: 0 3px 5px rgba(0,0,0,0.05);
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -458,6 +505,104 @@ Gere uma apresentação completa aplicando ESTA ESTRUTURA ESPECÍFICA a um relat
     
     except Exception as e:
         return f"❌ Erro ao gerar slides: {str(e)[:200]}"
+
+def generate_yoy_analysis(yoy_data, context=""):
+    """Gera análise YoY com Gemini"""
+    
+    if not modelo_texto:
+        return "⚠️ Gemini não configurado."
+    
+    try:
+        prompt = f"""
+        # 📊 ANÁLISE YoY (Year-over-Year) DE PERFORMANCE
+        
+        ## 📈 DADOS YoY FORNECIDOS:
+        {yoy_data}
+        
+        ## 📝 CONTEXTO ADICIONAL:
+        {context if context else "Nenhum contexto adicional fornecido."}
+        
+        ## 🎯 TAREFA:
+        
+        Com base nos dados YoY fornecidos acima, crie uma análise completa em português que inclua:
+        
+        1. **📊 RESUMO EXECUTIVO** (1-2 parágrafos)
+        2. **💰 ANÁLISE DE INVESTIMENTO** (comparativo, eficiência, alocação)
+        3. **📈 ANÁLISE DE PERFORMANCE** (sessões, engajamento, views, outras métricas)
+        4. **🔍 INSIGHTS PRINCIPAIS** (3-5 insights baseados nos dados)
+        5. **🎯 RECOMENDAÇÕES ESTRATÉGICAS** (5-7 recomendações acionáveis)
+        6. **📅 PRÓXIMOS PASSOS** (ações sugeridas para o próximo período)
+        
+        Seja específico, use os números fornecidos e forneça interpretações práticas.
+        Foque em insights que ajudem na tomada de decisão.
+        """
+        
+        with st.spinner("🤖 Gemini está analisando os dados YoY..."):
+            response = modelo_texto.generate_content(prompt)
+            return response.text
+    
+    except Exception as e:
+        return f"❌ Erro na análise YoY: {str(e)[:200]}"
+
+def analyze_pasted_data(pasted_text, analysis_type="overall", context=""):
+    """Analisa dados colados com Gemini"""
+    
+    if not modelo_texto:
+        return "⚠️ Gemini não configurado.", None
+    
+    try:
+        # Tentar extrair estrutura dos dados
+        prompt_structure = f"""
+        Analise o seguinte texto que contém dados numéricos e estrutura-os em formato tabular.
+        Identifique cabeçalhos, métricas, valores e períodos.
+        
+        Dados fornecidos:
+        {pasted_text}
+        
+        Retorne:
+        1. Uma descrição da estrutura identificada
+        2. Os dados estruturados em formato de tabela (se possível)
+        """
+        
+        with st.spinner("🔍 Estruturando dados..."):
+            structure_response = modelo_texto.generate_content(prompt_structure)
+        
+        # Análise completa
+        prompt_analysis = f"""
+        # 📊 ANÁLISE DE DADOS NUMÉRICOS
+        
+        ## 📋 DADOS FORNECIDOS:
+        {pasted_text}
+        
+        ## 🏗️ ESTRUTURA IDENTIFICADA:
+        {structure_response.text}
+        
+        ## 📝 CONTEXTO ADICIONAL:
+        {context if context else "Nenhum contexto adicional fornecido."}
+        
+        ## 🎯 TIPO DE ANÁLISE SOLICITADA:
+        {analysis_type}
+        
+        ## 📊 TAREFA:
+        
+        Analise os dados fornecidos e:
+        
+        1. **📈 IDENTIFIQUE AS PRINCIPAIS MÉTRICAS** (quais são as métricas mais importantes)
+        2. **📊 CALCULE ESTATÍSTICAS** (totais, médias, variações quando aplicável)
+        3. **🔍 EXTRAIA INSIGHTS** (3-5 insights principais dos dados)
+        4. **📋 APRESENTE OS DADOS** (formate os dados principais em uma tabela clara)
+        5. **🎯 FORNEÇA RECOMENDAÇÕES** (baseadas nos dados analisados)
+        
+        Seja prático e específico com os números fornecidos.
+        """
+        
+        with st.spinner("🤖 Analisando dados..."):
+            analysis_response = modelo_texto.generate_content(prompt_analysis)
+        
+        return analysis_response.text, structure_response.text
+    
+    except Exception as e:
+        return f"❌ Erro na análise: {str(e)[:200]}", None
 
 # =============================================================================
 # CONEXÃO BIGQUERY
@@ -785,6 +930,174 @@ def criar_visualizacao_coluna(df, coluna):
         return None
 
 # =============================================================================
+# FUNÇÕES PARA ANÁLISE MOM E YOY
+# =============================================================================
+
+def calculate_mom_analysis(df, cliente, mes_atual, mes_anterior):
+    """Calcula análise MoM (Month-over-Month)"""
+    
+    if df.empty:
+        return None
+    
+    # Filtrar por cliente
+    if cliente != "Todos" and 'cliente_identificado' in df.columns:
+        df_filtered = df[df['cliente_identificado'] == cliente].copy()
+    else:
+        df_filtered = df.copy()
+    
+    if df_filtered.empty:
+        return None
+    
+    # Verificar coluna de data
+    if 'date' not in df_filtered.columns:
+        return None
+    
+    # Converter datas
+    df_filtered['date'] = pd.to_datetime(df_filtered['date'], errors='coerce')
+    df_filtered['mes'] = df_filtered['date'].dt.to_period('M')
+    
+    # Filtrar pelos meses especificados
+    df_mes_atual = df_filtered[df_filtered['mes'] == mes_atual]
+    df_mes_anterior = df_filtered[df_filtered['mes'] == mes_anterior]
+    
+    # Análise por plataforma/datasource
+    analysis_results = {
+        'cliente': cliente,
+        'mes_atual': str(mes_atual),
+        'mes_anterior': str(mes_anterior),
+        'total_mes_atual': len(df_mes_atual),
+        'total_mes_anterior': len(df_mes_anterior),
+        'platform_analysis': {},
+        'metric_analysis': {}
+    }
+    
+    # Análise por plataforma
+    if 'datasource' in df_filtered.columns:
+        platforms = df_filtered['datasource'].unique()
+        
+        for platform in platforms:
+            platform_current = df_mes_atual[df_mes_atual['datasource'] == platform]
+            platform_previous = df_mes_anterior[df_mes_anterior['datasource'] == platform]
+            
+            # Calcular investimento (spend)
+            spend_current = 0
+            spend_previous = 0
+            
+            # Procurar coluna de spend
+            spend_cols = [col for col in df_filtered.columns if 'spend' in col.lower() or 'cost' in col.lower()]
+            if spend_cols:
+                spend_col = spend_cols[0]
+                spend_current = pd.to_numeric(platform_current[spend_col], errors='coerce').sum()
+                spend_previous = pd.to_numeric(platform_previous[spend_col], errors='coerce').sum()
+            
+            analysis_results['platform_analysis'][platform] = {
+                'spend_current': spend_current,
+                'spend_previous': spend_previous,
+                'spend_change': spend_current - spend_previous,
+                'spend_change_pct': ((spend_current - spend_previous) / spend_previous * 100) if spend_previous > 0 else 0,
+                'records_current': len(platform_current),
+                'records_previous': len(platform_previous)
+            }
+    
+    # Análise de métricas
+    metric_cols = identificar_colunas_numericas(df_filtered)
+    priority_metrics = ['spend', 'revenue', 'conversions', 'impressions', 'clicks', 'cpc', 'cpm', 'ctr', 'roas']
+    
+    for metric_name in priority_metrics:
+        for col in metric_cols:
+            if metric_name in col.lower():
+                metric_current = pd.to_numeric(df_mes_atual[col], errors='coerce').sum()
+                metric_previous = pd.to_numeric(df_mes_anterior[col], errors='coerce').sum()
+                
+                change = metric_current - metric_previous
+                change_pct = (change / metric_previous * 100) if metric_previous > 0 else 0
+                
+                analysis_results['metric_analysis'][col] = {
+                    'current': metric_current,
+                    'previous': metric_previous,
+                    'change': change,
+                    'change_pct': change_pct
+                }
+                break
+    
+    return analysis_results
+
+def format_currency(value):
+    """Formata valor como moeda"""
+    try:
+        if pd.isna(value):
+            return "R$ 0"
+        return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except:
+        return f"R$ {value}"
+
+def format_percentage(value):
+    """Formata valor como porcentagem"""
+    try:
+        if pd.isna(value):
+            return "0.00%"
+        return f"{value:.2f}%".replace(".", ",")
+    except:
+        return f"{value}%"
+
+def create_mom_table(analysis_results):
+    """Cria tabela de análise MoM"""
+    
+    if not analysis_results or 'platform_analysis' not in analysis_results:
+        return None
+    
+    platform_data = analysis_results['platform_analysis']
+    
+    if not platform_data:
+        return None
+    
+    # Criar DataFrame para tabela
+    platforms = list(platform_data.keys())
+    
+    table_data = {
+        'Plataforma': platforms,
+        f'Investimento {analysis_results["mes_anterior"]}': [],
+        f'Investimento {analysis_results["mes_atual"]}': [],
+        'Variação MoM': [],
+        'Variação %': [],
+        'Registros Anterior': [],
+        'Registros Atual': []
+    }
+    
+    total_current = 0
+    total_previous = 0
+    
+    for platform in platforms:
+        data = platform_data[platform]
+        
+        table_data[f'Investimento {analysis_results["mes_anterior"]}'].append(format_currency(data['spend_previous']))
+        table_data[f'Investimento {analysis_results["mes_atual"]}'].append(format_currency(data['spend_current']))
+        table_data['Variação MoM'].append(format_currency(data['spend_change']))
+        table_data['Variação %'].append(format_percentage(data['spend_change_pct']))
+        table_data['Registros Anterior'].append(f"{data['records_previous']:,}")
+        table_data['Registros Atual'].append(f"{data['records_current']:,}")
+        
+        total_current += data['spend_current']
+        total_previous += data['spend_previous']
+    
+    # Adicionar linha de total
+    table_data['Plataforma'].append('TOTAL')
+    table_data[f'Investimento {analysis_results["mes_anterior"]}'].append(format_currency(total_previous))
+    table_data[f'Investimento {analysis_results["mes_atual"]}'].append(format_currency(total_current))
+    
+    total_change = total_current - total_previous
+    total_change_pct = (total_change / total_previous * 100) if total_previous > 0 else 0
+    
+    table_data['Variação MoM'].append(format_currency(total_change))
+    table_data['Variação %'].append(format_percentage(total_change_pct))
+    table_data['Registros Anterior'].append(f"{analysis_results['total_mes_anterior']:,}")
+    table_data['Registros Atual'].append(f"{analysis_results['total_mes_atual']:,}")
+    
+    df_table = pd.DataFrame(table_data)
+    
+    return df_table
+
+# =============================================================================
 # FUNÇÕES PARA CLASSIFICADOR DE CAMPANHAS MULTI-CLIENTES
 # =============================================================================
 
@@ -1080,6 +1393,12 @@ if 'filtros_aplicados' not in st.session_state:
     st.session_state.filtros_aplicados = {}
 if 'slides_description' not in st.session_state:
     st.session_state.slides_description = None
+if 'mom_analysis' not in st.session_state:
+    st.session_state.mom_analysis = None
+if 'yoy_analysis' not in st.session_state:
+    st.session_state.yoy_analysis = None
+if 'pasted_data_analysis' not in st.session_state:
+    st.session_state.pasted_data_analysis = None
 
 # Sidebar
 with st.sidebar:
@@ -1450,14 +1769,17 @@ else:
     st.info("ℹ️ Nenhum filtro aplicado. Todos os dados estão visíveis.")
 
 # Abas principais
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
     "📋 Visão Geral", 
     "📈 Análise Numérica", 
     "🔍 Explorar Colunas", 
     "📊 Visualizar Dados",
     "🎯 Performance",
     "🤖 Análise com IA",
-    "🎪 Classificador Campanhas"
+    "🎪 Classificador Campanhas",
+    "📅 Análise MoM",
+    "📊 Cenário YoY",
+    "📋 Dados Colados"
 ])
 
 # =============================================================================
@@ -2450,6 +2772,787 @@ with tab7:
                     
                 except Exception as e:
                     st.error(f"Erro na análise: {str(e)[:200]}")
+
+# =============================================================================
+# TAB 8: ANÁLISE MOM (MONTH-OVER-MONTH)
+# =============================================================================
+
+with tab8:
+    st.markdown('<div class="mom-analysis"><h2>📅 Análise MoM (Month-over-Month)</h2></div>', unsafe_allow_html=True)
+    
+    st.markdown("### 🎯 Configuração da Análise")
+    
+    col_config1, col_config2, col_config3 = st.columns(3)
+    
+    with col_config1:
+        # Cliente para análise
+        clientes_disponiveis = ["Todos"] + sorted(df['cliente_identificado'].unique().tolist()) if 'cliente_identificado' in df.columns else ["Todos"]
+        cliente_analise = st.selectbox(
+            "👥 Cliente para análise:",
+            options=clientes_disponiveis,
+            index=0,
+            key="cliente_analise_tab8"
+        )
+    
+    with col_config2:
+        # Mês atual
+        if 'date' in df.columns:
+            df_dates = df['date'].dropna()
+            if len(df_dates) > 0:
+                if not pd.api.types.is_datetime64_any_dtype(df_dates):
+                    df_dates = pd.to_datetime(df_dates, errors='coerce')
+                
+                meses_disponiveis = sorted(df_dates.dt.to_period('M').unique(), reverse=True)
+                meses_str = [str(m) for m in meses_disponiveis]
+                
+                mes_atual_period = st.selectbox(
+                    "📅 Mês Atual:",
+                    options=meses_str[:12] if len(meses_str) > 0 else [],
+                    key="mes_atual_tab8"
+                )
+            else:
+                mes_atual_period = None
+                st.info("Sem datas disponíveis")
+        else:
+            mes_atual_period = None
+            st.info("Coluna de data não encontrada")
+    
+    with col_config3:
+        # Mês anterior
+        if mes_atual_period:
+            # Calcular mês anterior
+            mes_atual_dt = pd.Period(mes_atual_period).to_timestamp()
+            mes_anterior_dt = mes_atual_dt - pd.DateOffset(months=1)
+            mes_anterior_period = pd.Period(mes_anterior_dt, freq='M')
+            
+            st.write(f"**Mês Anterior:** {mes_anterior_period}")
+        else:
+            mes_anterior_period = None
+    
+    st.markdown("### 📊 Executar Análise")
+    
+    if st.button("📈 Calcular Análise MoM", use_container_width=True, type="primary", key="calcular_mom_tab8"):
+        if mes_atual_period and mes_anterior_period:
+            with st.spinner(f"Calculando análise MoM para {cliente_analise}..."):
+                try:
+                    mom_result = calculate_mom_analysis(
+                        df, 
+                        cliente_analise, 
+                        pd.Period(mes_atual_period),
+                        pd.Period(mes_anterior_period)
+                    )
+                    
+                    if mom_result:
+                        st.session_state.mom_analysis = mom_result
+                        st.success("✅ Análise MoM calculada!")
+                    else:
+                        st.error("❌ Não foi possível calcular a análise MoM")
+                except Exception as e:
+                    st.error(f"❌ Erro ao calcular MoM: {str(e)[:200]}")
+        else:
+            st.error("❌ Selecione o mês atual para análise")
+    
+    if st.session_state.mom_analysis:
+        mom_data = st.session_state.mom_analysis
+        
+        st.markdown("### 📋 Resultados da Análise")
+        
+        col_res1, col_res2, col_res3, col_res4 = st.columns(4)
+        
+        with col_res1:
+            safe_metric("Cliente", mom_data['cliente'])
+        
+        with col_res2:
+            safe_metric("Mês Anterior", mom_data['mes_anterior'])
+        
+        with col_res3:
+            safe_metric("Mês Atual", mom_data['mes_atual'])
+        
+        with col_res4:
+            total_change = mom_data['total_mes_atual'] - mom_data['total_mes_anterior']
+            change_pct = (total_change / mom_data['total_mes_anterior'] * 100) if mom_data['total_mes_anterior'] > 0 else 0
+            safe_metric("Variação Registros", total_change, f"{change_pct:.1f}%")
+        
+        st.markdown("### 📊 Análise por Plataforma")
+        
+        # Criar tabela de análise
+        df_mom_table = create_mom_table(mom_data)
+        
+        if df_mom_table is not None:
+            st.dataframe(
+                df_mom_table.style.format(precision=2),
+                use_container_width=True
+            )
+            
+            # Gráfico de distribuição por plataforma
+            if 'platform_analysis' in mom_data and mom_data['platform_analysis']:
+                platform_current = {}
+                platform_previous = {}
+                
+                for platform, data in mom_data['platform_analysis'].items():
+                    platform_current[platform] = data['spend_current']
+                    platform_previous[platform] = data['spend_previous']
+                
+                # Criar DataFrame para gráfico
+                df_platforms = pd.DataFrame({
+                    'Plataforma': list(platform_current.keys()),
+                    'Mês Anterior': list(platform_previous.values()),
+                    'Mês Atual': list(platform_current.values())
+                })
+                
+                # Gráfico de barras
+                fig_platforms = go.Figure()
+                
+                fig_platforms.add_trace(go.Bar(
+                    name='Mês Anterior',
+                    x=df_platforms['Plataforma'],
+                    y=df_platforms['Mês Anterior'],
+                    marker_color='#6366f1'
+                ))
+                
+                fig_platforms.add_trace(go.Bar(
+                    name='Mês Atual',
+                    x=df_platforms['Plataforma'],
+                    y=df_platforms['Mês Atual'],
+                    marker_color='#10b981'
+                ))
+                
+                fig_platforms.update_layout(
+                    title="Investimento por Plataforma - Comparativo MoM",
+                    barmode='group',
+                    xaxis_title="Plataforma",
+                    yaxis_title="Investimento (R$)",
+                    height=500
+                )
+                
+                st.plotly_chart(fig_platforms, use_container_width=True)
+        
+        st.markdown("### 📈 Análise de Métricas")
+        
+        if 'metric_analysis' in mom_data and mom_data['metric_analysis']:
+            metric_data = mom_data['metric_analysis']
+            
+            if metric_data:
+                cols_metrics = st.columns(min(3, len(metric_data)))
+                
+                for idx, (metric_name, metric_info) in enumerate(metric_data.items()):
+                    if idx < 9:  # Mostrar até 9 métricas
+                        with cols_metrics[idx % 3]:
+                            st.markdown(f'<div class="yoy-metric">', unsafe_allow_html=True)
+                            st.subheader(metric_name)
+                            
+                            col_curr, col_prev = st.columns(2)
+                            with col_curr:
+                                st.metric(
+                                    "Atual", 
+                                    format_currency(metric_info['current']) if 'spend' in metric_name.lower() or 'cost' in metric_name.lower() or 'revenue' in metric_name.lower() else f"{metric_info['current']:,.0f}"
+                                )
+                            
+                            with col_prev:
+                                st.metric(
+                                    "Anterior", 
+                                    format_currency(metric_info['previous']) if 'spend' in metric_name.lower() or 'cost' in metric_name.lower() or 'revenue' in metric_name.lower() else f"{metric_info['previous']:,.0f}"
+                                )
+                            
+                            change_color = "green" if metric_info['change'] > 0 else "red"
+                            st.markdown(f"**Variação:** <span style='color:{change_color}'>{format_currency(metric_info['change']) if 'spend' in metric_name.lower() or 'cost' in metric_name.lower() or 'revenue' in metric_name.lower() else f"{metric_info['change']:,.0f}"} ({metric_info['change_pct']:.1f}%)</span>", unsafe_allow_html=True)
+                            st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown("### 📝 Relatório de Análise")
+        
+        if modelo_texto:
+            if st.button("📄 Gerar Relatório com Gemini", use_container_width=True, key="gerar_relatorio_mom_tab8"):
+                with st.spinner("Gerando relatório de análise MoM..."):
+                    try:
+                        # Preparar dados para Gemini
+                        analysis_text = f"""
+                        CLIENTE: {mom_data['cliente']}
+                        PERÍODO: {mom_data['mes_anterior']} vs {mom_data['mes_atual']}
+                        
+                        RESUMO GERAL:
+                        - Total de registros mês anterior: {mom_data['total_mes_anterior']:,}
+                        - Total de registros mês atual: {mom_data['total_mes_atual']:,}
+                        - Variação: {mom_data['total_mes_atual'] - mom_data['total_mes_anterior']:,} ({((mom_data['total_mes_atual'] - mom_data['total_mes_anterior']) / mom_data['total_mes_anterior'] * 100):.1f}%)
+                        
+                        ANÁLISE POR PLATAFORMA:
+                        """
+                        
+                        for platform, data in mom_data.get('platform_analysis', {}).items():
+                            analysis_text += f"""
+                            - {platform}:
+                              * Investimento anterior: R$ {data['spend_previous']:,.2f}
+                              * Investimento atual: R$ {data['spend_current']:,.2f}
+                              * Variação: R$ {data['spend_change']:,.2f} ({data['spend_change_pct']:.1f}%)
+                              * Registros anterior: {data['records_previous']:,}
+                              * Registros atual: {data['records_current']:,}
+                            """
+                        
+                        analysis_text += """
+                        
+                        ANÁLISE DE MÉTRICAS:
+                        """
+                        
+                        for metric, data in mom_data.get('metric_analysis', {}).items():
+                            analysis_text += f"""
+                            - {metric}:
+                              * Anterior: {data['previous']:,.2f}
+                              * Atual: {data['current']:,.2f}
+                              * Variação: {data['change']:,.2f} ({data['change_pct']:.1f}%)
+                            """
+                        
+                        prompt = f"""
+                        # 📊 RELATÓRIO DE ANÁLISE MoM (Month-over-Month)
+                        
+                        {analysis_text}
+                        
+                        ## 🎯 TAREFA:
+                        
+                        Com base nos dados MoM acima, crie um relatório executivo em português que inclua:
+                        
+                        1. **📈 RESUMO EXECUTIVO** (1-2 parágrafos com os principais achados)
+                        2. **💰 ANÁLISE DE INVESTIMENTO** (comparativo por plataforma, eficiência)
+                        3. **📊 ANÁLISE DE PERFORMANCE** (principais métricas e suas variações)
+                        4. **🔍 INSIGHTS ESTRATÉGICOS** (3-5 insights baseados nos dados)
+                        5. **🎯 RECOMENDAÇÕES** (5-7 recomendações acionáveis para o próximo mês)
+                        6. **📅 PRÓXIMOS PASSOS** (plano de ação sugerido)
+                        
+                        Foque em:
+                        - Evolução da redistribuição estratégica de investimento por plataforma
+                        - Estratégia eficaz com menor investimento (se aplicável)
+                        - Eficiência e diminuição nos custos das campanhas de mídia paga
+                        - Performance geral e engajamento
+                        
+                        Seja específico com os números e forneça interpretações práticas.
+                        """
+                        
+                        response = modelo_texto.generate_content(prompt)
+                        
+                        st.markdown("### 📄 Relatório Gemini")
+                        st.markdown('<div class="gemini-response">', unsafe_allow_html=True)
+                        st.markdown(response.text)
+                        st.markdown('</div>', unsafe_allow_html=True)
+                        
+                    except Exception as e:
+                        st.error(f"❌ Erro ao gerar relatório: {str(e)[:200]}")
+
+# =============================================================================
+# TAB 9: CENÁRIO YOY (YEAR-OVER-YEAR)
+# =============================================================================
+
+with tab9:
+    st.markdown('<div class="yoy-scenario"><h2>📊 Cenário YoY (Year-over-Year)</h2></div>', unsafe_allow_html=True)
+    
+    st.markdown("### 🎯 Configurar Cenário YoY")
+    
+    # Cliente para análise
+    col_yoy1, col_yoy2 = st.columns(2)
+    
+    with col_yoy1:
+        cliente_yoy = st.selectbox(
+            "👥 Cliente:",
+            options=["Syngenta", "Golden Harvest Brasil", "Nidera", "NK Seeds", "EuroChem", "Grupo Vittia", "Outros"],
+            index=0,
+            key="cliente_yoy_tab9"
+        )
+        
+        ano_atual = st.number_input(
+            "📅 Ano Atual:",
+            min_value=2020,
+            max_value=2030,
+            value=2025,
+            step=1,
+            key="ano_atual_tab9"
+        )
+        
+        ano_anterior = st.number_input(
+            "📅 Ano Anterior:",
+            min_value=2020,
+            max_value=2030,
+            value=2024,
+            step=1,
+            key="ano_anterior_tab9"
+        )
+    
+    with col_yoy2:
+        mes_yoy = st.selectbox(
+            "📅 Mês:",
+            options=[
+                "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+            ],
+            index=10,  # Novembro
+            key="mes_yoy_tab9"
+        )
+        
+        periodo_yoy = st.selectbox(
+            "⏱️ Período:",
+            options=["Mês Completo", "Primeira Quinzena", "Segunda Quinzena", "Semana Específica"],
+            index=0,
+            key="periodo_yoy_tab9"
+        )
+    
+    st.markdown("### 📈 Inserir Dados YoY")
+    
+    with st.expander("💰 Dados de Investimento", expanded=True):
+        st.markdown("#### Investimento por Plataforma")
+        
+        col_inv1, col_inv2, col_inv3, col_inv4 = st.columns(4)
+        
+        with col_inv1:
+            fb_atual = st.number_input("FB/Insta Atual (R$):", min_value=0.0, value=60817.0, step=1000.0, key="fb_atual_tab9")
+            fb_anterior = st.number_input("FB/Insta Anterior (R$):", min_value=0.0, value=60357.0, step=1000.0, key="fb_anterior_tab9")
+        
+        with col_inv2:
+            tiktok_atual = st.number_input("TikTok Atual (R$):", min_value=0.0, value=45831.0, step=1000.0, key="tiktok_atual_tab9")
+            tiktok_anterior = st.number_input("TikTok Anterior (R$):", min_value=0.0, value=33004.0, step=1000.0, key="tiktok_anterior_tab9")
+        
+        with col_inv3:
+            display_atual = st.number_input("Display Atual (R$):", min_value=0.0, value=93618.0, step=1000.0, key="display_atual_tab9")
+            display_anterior = st.number_input("Display Anterior (R$):", min_value=0.0, value=58313.0, step=1000.0, key="display_anterior_tab9")
+        
+        with col_inv4:
+            youtube_atual = st.number_input("YouTube Atual (R$):", min_value=0.0, value=81890.0, step=1000.0, key="youtube_atual_tab9")
+            youtube_anterior = st.number_input("YouTube Anterior (R$):", min_value=0.0, value=60379.0, step=1000.0, key="youtube_anterior_tab9")
+    
+    col_inv5, col_inv6, col_inv7 = st.columns(3)
+    
+    with col_inv5:
+        pmax_atual = st.number_input("PMax Atual (R$):", min_value=0.0, value=14632.0, step=1000.0, key="pmax_atual_tab9")
+        pmax_anterior = st.number_input("PMax Anterior (R$):", min_value=0.0, value=17.0, step=1000.0, key="pmax_anterior_tab9")
+    
+    with col_inv6:
+        search_atual = st.number_input("Search Atual (R$):", min_value=0.0, value=3451.15, step=1000.0, key="search_atual_tab9")
+        search_anterior = st.number_input("Search Anterior (R$):", min_value=0.0, value=0.0, step=1000.0, key="search_anterior_tab9")
+    
+    with col_inv7:
+        outras_atual = st.number_input("Outras Atual (R$):", min_value=0.0, value=0.0, step=1000.0, key="outras_atual_tab9")
+        outras_anterior = st.number_input("Outras Anterior (R$):", min_value=0.0, value=0.0, step=1000.0, key="outras_anterior_tab9")
+    
+    with st.expander("📊 Dados de Performance", expanded=True):
+        col_perf1, col_perf2, col_perf3 = st.columns(3)
+        
+        with col_perf1:
+            sessoes_atual = st.number_input("Sessões Atual:", min_value=0, value=938000, step=1000, key="sessoes_atual_tab9")
+            sessoes_anterior = st.number_input("Sessões Anterior:", min_value=0, value=1050000, step=1000, key="sessoes_anterior_tab9")
+            
+            tempo_medio_atual = st.number_input("Tempo Médio Atual (min):", min_value=0.0, value=2.0, step=0.1, key="tempo_medio_atual_tab9")
+            tempo_medio_anterior = st.number_input("Tempo Médio Anterior (min):", min_value=0.0, value=2.06, step=0.1, key="tempo_medio_anterior_tab9")
+        
+        with col_perf2:
+            engajamento_atual = st.number_input("Engajamento Atual:", min_value=0, value=22500000, step=100000, key="engajamento_atual_tab9")
+            engajamento_anterior = st.number_input("Engajamento Anterior:", min_value=0, value=20250000, step=100000, key="engajamento_anterior_tab9")
+            
+            views_atual = st.number_input("Views Atual:", min_value=0, value=15000000, step=100000, key="views_atual_tab9")
+            views_anterior = st.number_input("Views Anterior:", min_value=0, value=11200000, step=100000, key="views_anterior_tab9")
+        
+        with col_perf3:
+            conversoes_atual = st.number_input("Conversões Atual:", min_value=0, value=1500, step=10, key="conversoes_atual_tab9")
+            conversoes_anterior = st.number_input("Conversões Anterior:", min_value=0, value=1200, step=10, key="conversoes_anterior_tab9")
+            
+            cpc_atual = st.number_input("CPC Atual (R$):", min_value=0.0, value=1.85, step=0.01, key="cpc_atual_tab9")
+            cpc_anterior = st.number_input("CPC Anterior (R$):", min_value=0.0, value=1.95, step=0.01, key="cpc_anterior_tab9")
+    
+    with st.expander("🎯 Dados de Produtos (Top 10)", expanded=False):
+        st.info("Insira dados dos top 10 produtos (opcional)")
+        
+        produtos_data = []
+        for i in range(1, 6):
+            col_prod1, col_prod2 = st.columns(2)
+            with col_prod1:
+                produto_nome = st.text_input(f"Produto {i}:", value="", key=f"produto_{i}_nome_tab9")
+            with col_prod2:
+                if produto_nome:
+                    eng_prod = st.number_input(f"Engajamento {produto_nome}:", min_value=0, value=0, step=1000, key=f"eng_prod_{i}_tab9")
+                    produtos_data.append({"produto": produto_nome, "engajamento": eng_prod})
+    
+    st.markdown("### 📝 Contexto Adicional")
+    
+    contexto_yoy = st.text_area(
+        "📋 Informações de contexto (opcional):",
+        placeholder="Ex: Campanha de lançamento de novo produto, aumento sazonal de custos, mudança de estratégia...",
+        height=100,
+        key="contexto_yoy_tab9"
+    )
+    
+    st.markdown("### 🚀 Calcular e Analisar")
+    
+    if st.button("📊 Calcular Análise YoY", use_container_width=True, type="primary", key="calcular_yoy_tab9"):
+        with st.spinner("Calculando análise YoY..."):
+            try:
+                # Calcular totais
+                total_invest_atual = fb_atual + tiktok_atual + display_atual + youtube_atual + pmax_atual + search_atual + outras_atual
+                total_invest_anterior = fb_anterior + tiktok_anterior + display_anterior + youtube_anterior + pmax_anterior + search_anterior + outras_anterior
+                
+                # Calcular variações
+                var_invest = total_invest_atual - total_invest_anterior
+                var_invest_pct = (var_invest / total_invest_anterior * 100) if total_invest_anterior > 0 else 0
+                
+                var_sessoes = sessoes_atual - sessoes_anterior
+                var_sessoes_pct = (var_sessoes / sessoes_anterior * 100) if sessoes_anterior > 0 else 0
+                
+                var_engajamento = engajamento_atual - engajamento_anterior
+                var_engajamento_pct = (var_engajamento / engajamento_anterior * 100) if engajamento_anterior > 0 else 0
+                
+                var_tempo = tempo_medio_atual - tempo_medio_anterior
+                var_tempo_pct = (var_tempo / tempo_medio_anterior * 100) if tempo_medio_anterior > 0 else 0
+                
+                var_views = views_atual - views_anterior
+                var_views_pct = (var_views / views_anterior * 100) if views_anterior > 0 else 0
+                
+                var_conversoes = conversoes_atual - conversoes_anterior
+                var_conversoes_pct = (var_conversoes / conversoes_anterior * 100) if conversoes_anterior > 0 else 0
+                
+                var_cpc = cpc_atual - cpc_anterior
+                var_cpc_pct = (var_cpc / cpc_anterior * 100) if cpc_anterior > 0 else 0
+                
+                # Preparar dados para Gemini
+                yoy_data = f"""
+                # 📊 DADOS YoY - {cliente_yoy}
+                
+                ## 📅 PERÍODO:
+                - Mês: {mes_yoy}
+                - Ano Atual: {ano_atual} vs Ano Anterior: {ano_anterior}
+                - Período: {periodo_yoy}
+                
+                ## 💰 INVESTIMENTO POR PLATAFORMA:
+                
+                ### ANO {ano_anterior} ({mes_yoy}):
+                - FB/Instagram: R$ {fb_anterior:,.2f}
+                - TikTok: R$ {tiktok_anterior:,.2f}
+                - Display: R$ {display_anterior:,.2f}
+                - YouTube: R$ {youtube_anterior:,.2f}
+                - PMax: R$ {pmax_anterior:,.2f}
+                - Search: R$ {search_anterior:,.2f}
+                - Outras: R$ {outras_anterior:,.2f}
+                - **TOTAL ANTERIOR: R$ {total_invest_anterior:,.2f}**
+                
+                ### ANO {ano_atual} ({mes_yoy}):
+                - FB/Instagram: R$ {fb_atual:,.2f}
+                - TikTok: R$ {tiktok_atual:,.2f}
+                - Display: R$ {display_atual:,.2f}
+                - YouTube: R$ {youtube_atual:,.2f}
+                - PMax: R$ {pmax_atual:,.2f}
+                - Search: R$ {search_atual:,.2f}
+                - Outras: R$ {outras_atual:,.2f}
+                - **TOTAL ATUAL: R$ {total_invest_atual:,.2f}**
+                
+                ## 📈 VARIAÇÃO INVESTIMENTO:
+                - Variação Total: R$ {var_invest:,.2f} ({var_invest_pct:.1f}%)
+                
+                ## 📊 PERFORMANCE:
+                
+                ### SESSÕES:
+                - {ano_anterior}: {sessoes_anterior:,}
+                - {ano_atual}: {sessoes_atual:,}
+                - Variação: {var_sessoes:+,} ({var_sessoes_pct:+.1f}%)
+                
+                ### TEMPO MÉDIO:
+                - {ano_anterior}: {tempo_medio_anterior:.2f} min
+                - {ano_atual}: {tempo_medio_atual:.2f} min
+                - Variação: {var_tempo:+.2f} min ({var_tempo_pct:+.1f}%)
+                
+                ### ENGAJAMENTO:
+                - {ano_anterior}: {engajamento_anterior:,}
+                - {ano_atual}: {engajamento_atual:,}
+                - Variação: {var_engajamento:+,} ({var_engajamento_pct:+.1f}%)
+                
+                ### VIEWS:
+                - {ano_anterior}: {views_anterior:,}
+                - {ano_atual}: {views_atual:,}
+                - Variação: {var_views:+,} ({var_views_pct:+.1f}%)
+                
+                ### CONVERSÕES:
+                - {ano_anterior}: {conversoes_anterior:,}
+                - {ano_atual}: {conversoes_atual:,}
+                - Variação: {var_conversoes:+,} ({var_conversoes_pct:+.1f}%)
+                
+                ### CPC (Custo por Clique):
+                - {ano_anterior}: R$ {cpc_anterior:.2f}
+                - {ano_atual}: R$ {cpc_atual:.2f}
+                - Variação: R$ {var_cpc:+.2f} ({var_cpc_pct:+.1f}%)
+                """
+                
+                if produtos_data:
+                    yoy_data += "\n\n## 🏆 TOP PRODUTOS (por engajamento):\n"
+                    for prod in produtos_data:
+                        yoy_data += f"- **{prod['produto']}**: {prod['engajamento']:,} engajamentos\n"
+                
+                st.session_state.yoy_analysis = yoy_data
+                st.success("✅ Dados YoY calculados!")
+                
+            except Exception as e:
+                st.error(f"❌ Erro ao calcular YoY: {str(e)[:200]}")
+    
+    if st.session_state.yoy_analysis:
+        yoy_data = st.session_state.yoy_analysis
+        
+        st.markdown("### 📋 Resumo dos Dados")
+        
+        col_sum1, col_sum2, col_sum3 = st.columns(3)
+        
+        with col_sum1:
+            # Extrair totais do texto
+            import re
+            
+            total_atual_match = re.search(r'TOTAL ATUAL: R\$ ([\d,]+\.\d{2})', yoy_data)
+            total_anterior_match = re.search(r'TOTAL ANTERIOR: R\$ ([\d,]+\.\d{2})', yoy_data)
+            
+            if total_atual_match and total_anterior_match:
+                total_atual = float(total_atual_match.group(1).replace(',', ''))
+                total_anterior = float(total_anterior_match.group(1).replace(',', ''))
+                var_total = total_atual - total_anterior
+                var_total_pct = (var_total / total_anterior * 100) if total_anterior > 0 else 0
+                
+                safe_metric("Investimento Atual", format_currency(total_atual))
+                safe_metric("Investimento Anterior", format_currency(total_anterior))
+                safe_metric("Variação Investimento", format_currency(var_total), f"{var_total_pct:.1f}%")
+        
+        with col_sum2:
+            # Extrair sessões
+            sessoes_match = re.search(r'SESSÕES:\s*\n.*?' + str(ano_anterior) + r': ([\d,]+)\s*\n.*?' + str(ano_atual) + r': ([\d,]+)', yoy_data, re.DOTALL)
+            if sessoes_match:
+                sessoes_ant = int(sessoes_match.group(1).replace(',', ''))
+                sessoes_at = int(sessoes_match.group(2).replace(',', ''))
+                var_sess = sessoes_at - sessoes_ant
+                var_sess_pct = (var_sess / sessoes_ant * 100) if sessoes_ant > 0 else 0
+                
+                safe_metric("Sessões Atual", f"{sessoes_at:,}")
+                safe_metric("Sessões Anterior", f"{sessoes_ant:,}")
+                safe_metric("Variação Sessões", f"{var_sess:+,}", f"{var_sess_pct:+.1f}%")
+        
+        with col_sum3:
+            # Extrair engajamento
+            eng_match = re.search(r'ENGAJAMENTO:\s*\n.*?' + str(ano_anterior) + r': ([\d,]+)\s*\n.*?' + str(ano_atual) + r': ([\d,]+)', yoy_data, re.DOTALL)
+            if eng_match:
+                eng_ant = int(eng_match.group(1).replace(',', ''))
+                eng_at = int(eng_match.group(2).replace(',', ''))
+                var_eng = eng_at - eng_ant
+                var_eng_pct = (var_eng / eng_ant * 100) if eng_ant > 0 else 0
+                
+                safe_metric("Engajamento Atual", f"{eng_at:,}")
+                safe_metric("Engajamento Anterior", f"{eng_ant:,}")
+                safe_metric("Variação Engajamento", f"{var_eng:+,}", f"{var_eng_pct:+.1f}%")
+        
+        st.markdown("### 📊 Tabela de Comparativo")
+        
+        # Criar tabela comparativa
+        comparativo_data = {
+            'Métrica': ['Investimento Total', 'Sessões', 'Tempo Médio', 'Engajamento', 'Views', 'Conversões', 'CPC'],
+            f'{ano_anterior}': [
+                format_currency(total_anterior) if 'total_anterior' in locals() else 'N/A',
+                f"{sessoes_anterior:,}" if 'sessoes_anterior' in locals() else 'N/A',
+                f"{tempo_medio_anterior:.2f} min" if 'tempo_medio_anterior' in locals() else 'N/A',
+                f"{engajamento_anterior:,}" if 'engajamento_anterior' in locals() else 'N/A',
+                f"{views_anterior:,}" if 'views_anterior' in locals() else 'N/A',
+                f"{conversoes_anterior:,}" if 'conversoes_anterior' in locals() else 'N/A',
+                f"R$ {cpc_anterior:.2f}" if 'cpc_anterior' in locals() else 'N/A'
+            ],
+            f'{ano_atual}': [
+                format_currency(total_atual) if 'total_atual' in locals() else 'N/A',
+                f"{sessoes_atual:,}" if 'sessoes_atual' in locals() else 'N/A',
+                f"{tempo_medio_atual:.2f} min" if 'tempo_medio_atual' in locals() else 'N/A',
+                f"{engajamento_atual:,}" if 'engajamento_atual' in locals() else 'N/A',
+                f"{views_atual:,}" if 'views_atual' in locals() else 'N/A',
+                f"{conversoes_atual:,}" if 'conversoes_atual' in locals() else 'N/A',
+                f"R$ {cpc_atual:.2f}" if 'cpc_atual' in locals() else 'N/A'
+            ],
+            'Variação': [
+                f"{var_invest_pct:+.1f}%" if 'var_invest_pct' in locals() else 'N/A',
+                f"{var_sessoes_pct:+.1f}%" if 'var_sessoes_pct' in locals() else 'N/A',
+                f"{var_tempo_pct:+.1f}%" if 'var_tempo_pct' in locals() else 'N/A',
+                f"{var_engajamento_pct:+.1f}%" if 'var_engajamento_pct' in locals() else 'N/A',
+                f"{var_views_pct:+.1f}%" if 'var_views_pct' in locals() else 'N/A',
+                f"{var_conversoes_pct:+.1f}%" if 'var_conversoes_pct' in locals() else 'N/A',
+                f"{var_cpc_pct:+.1f}%" if 'var_cpc_pct' in locals() else 'N/A'
+            ]
+        }
+        
+        df_comparativo = pd.DataFrame(comparativo_data)
+        st.dataframe(df_comparativo, use_container_width=True)
+        
+        st.markdown("### 📈 Gráfico de Comparativo")
+        
+        # Gráfico de barras para métricas principais
+        metricas_grafico = ['Investimento', 'Sessões', 'Engajamento']
+        valores_anterior = [total_anterior/1000, sessoes_anterior/1000, engajamento_anterior/1000000] if all(var in locals() for var in ['total_anterior', 'sessoes_anterior', 'engajamento_anterior']) else [0, 0, 0]
+        valores_atual = [total_atual/1000, sessoes_atual/1000, engajamento_atual/1000000] if all(var in locals() for var in ['total_atual', 'sessoes_atual', 'engajamento_atual']) else [0, 0, 0]
+        
+        fig_yoy = go.Figure()
+        
+        fig_yoy.add_trace(go.Bar(
+            name=f'{ano_anterior}',
+            x=metricas_grafico,
+            y=valores_anterior,
+            marker_color='#6366f1'
+        ))
+        
+        fig_yoy.add_trace(go.Bar(
+            name=f'{ano_atual}',
+            x=metricas_grafico,
+            y=valores_atual,
+            marker_color='#10b981'
+        ))
+        
+        fig_yoy.update_layout(
+            title=f"Comparativo YoY - {mes_yoy}",
+            barmode='group',
+            xaxis_title="Métrica",
+            yaxis_title="Valor",
+            height=500
+        )
+        
+        # Adicionar anotações com variação percentual
+        for i, (ant, at) in enumerate(zip(valores_anterior, valores_atual)):
+            if ant > 0:
+                var_pct = ((at - ant) / ant * 100)
+                fig_yoy.add_annotation(
+                    x=i,
+                    y=max(ant, at) * 1.05,
+                    text=f"{var_pct:+.1f}%",
+                    showarrow=False,
+                    font=dict(size=12, color="black")
+                )
+        
+        st.plotly_chart(fig_yoy, use_container_width=True)
+        
+        st.markdown("### 🤖 Gerar Análise com Gemini")
+        
+        if modelo_texto:
+            if st.button("📄 Gerar Análise Completa", use_container_width=True, type="primary", key="gerar_analise_yoy_tab9"):
+                with st.spinner("Gerando análise YoY com Gemini..."):
+                    try:
+                        analysis_result = generate_yoy_analysis(yoy_data, contexto_yoy)
+                        
+                        st.markdown("### 📄 Análise YoY Completa")
+                        st.markdown('<div class="gemini-response">', unsafe_allow_html=True)
+                        st.markdown(analysis_result)
+                        st.markdown('</div>', unsafe_allow_html=True)
+                        
+                        # Botão para download
+                        st.download_button(
+                            label="💾 Baixar Análise YoY",
+                            data=analysis_result,
+                            file_name=f"analise_yoy_{cliente_yoy}_{mes_yoy}_{ano_atual}_vs_{ano_anterior}.txt",
+                            mime="text/plain",
+                            use_container_width=True,
+                            key="download_yoy_tab9"
+                        )
+                        
+                    except Exception as e:
+                        st.error(f"❌ Erro ao gerar análise: {str(e)[:200]}")
+
+# =============================================================================
+# TAB 10: DADOS COLADOS
+# =============================================================================
+
+with tab10:
+    st.markdown('<div class="pasted-data"><h2>📋 Análise de Dados Colados</h2></div>', unsafe_allow_html=True)
+    
+    st.markdown("### 📝 Cole seus dados aqui")
+    
+    col_paste1, col_paste2 = st.columns([2, 1])
+    
+    with col_paste1:
+        pasted_text = st.text_area(
+            "Cole dados numéricos, tabelas, ou qualquer informação para análise:",
+            height=300,
+            placeholder="Exemplo:\n\nINVESTIMENTO MENSAL OUTUBRO\nFERRAMENTA FB INSTA TIKTOK DISPLAY Youtube PMax Total\nINVESTIMENTO R$ 60,357 R$ 121,923 R$ 33,004 R$ 58,313 R$ 60,379 R$ 17 R$ 333,992\nPORCENTAGEM 18.07% 36.50% 9.88% 17.46% 18.08% 0.01% 100.00%\n\nINVESTIMENTO MENSAL NOVEMBRO\nFERRAMENTA FB INSTA TIKTOK DISPLAY Youtube PMax Search Total\nINVESTIMENTO R$ 60.817 R$ 92.307 R$ 45.831 R$ 93.618 R$ 81.890 R$ 14.632 R$ 3.451,15 R$ 389.095\nPORCENTAGEM 15,63% 23,5% 11,6% 23,8% 20,8% 3,7% 0,9% 100.00%",
+            key="pasted_text_tab10"
+        )
+    
+    with col_paste2:
+        st.markdown("### ⚙️ Configuração")
+        
+        analysis_type_paste = st.selectbox(
+            "Tipo de Análise:",
+            options=["overall", "financial", "performance", "comparative", "insights"],
+            format_func=lambda x: {
+                "overall": "📊 Análise Geral",
+                "financial": "💰 Análise Financeira",
+                "performance": "📈 Análise de Performance",
+                "comparative": "🔄 Análise Comparativa",
+                "insights": "🔍 Extrair Insights"
+            }[x],
+            key="analysis_type_paste_tab10"
+        )
+        
+        context_paste = st.text_area(
+            "Contexto (opcional):",
+            height=100,
+            placeholder="Ex: Dados de campanhas de Novembro 2025, análise de performance por plataforma...",
+            key="context_paste_tab10"
+        )
+    
+    st.markdown("### 🚀 Analisar Dados")
+    
+    if st.button("🤖 Analisar Dados Colados", use_container_width=True, type="primary", key="analisar_paste_tab10"):
+        if not pasted_text or pasted_text.strip() == "":
+            st.error("❌ Cole alguns dados para análise")
+        elif not modelo_texto:
+            st.error("❌ Gemini não está configurado")
+        else:
+            with st.spinner("Analisando dados colados..."):
+                try:
+                    analysis_result, structure_result = analyze_pasted_data(
+                        pasted_text, 
+                        analysis_type_paste, 
+                        context_paste
+                    )
+                    
+                    st.session_state.pasted_data_analysis = analysis_result
+                    st.session_state.pasted_structure = structure_result
+                    
+                    st.success("✅ Análise concluída!")
+                    
+                except Exception as e:
+                    st.error(f"❌ Erro na análise: {str(e)[:200]}")
+    
+    if st.session_state.pasted_data_analysis:
+        analysis_result = st.session_state.pasted_data_analysis
+        structure_result = st.session_state.pasted_structure if 'pasted_structure' in st.session_state else None
+        
+        st.markdown("### 🏗️ Estrutura Identificada")
+        
+        if structure_result:
+            with st.expander("Ver estrutura dos dados"):
+                st.markdown('<div class="gemini-response">', unsafe_allow_html=True)
+                st.markdown(structure_result)
+                st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown("### 📄 Análise Completa")
+        
+        st.markdown('<div class="gemini-response">', unsafe_allow_html=True)
+        st.markdown(analysis_result)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        col_actions1, col_actions2, col_actions3 = st.columns(3)
+        
+        with col_actions1:
+            st.download_button(
+                label="💾 Baixar Análise",
+                data=analysis_result,
+                file_name=f"analise_dados_colados_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                mime="text/plain",
+                use_container_width=True,
+                key="download_analysis_paste_tab10"
+            )
+        
+        with col_actions2:
+            if structure_result:
+                st.download_button(
+                    label="📊 Baixar Estrutura",
+                    data=structure_result,
+                    file_name=f"estrutura_dados_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                    mime="text/plain",
+                    use_container_width=True,
+                    key="download_structure_paste_tab10"
+                )
+        
+        with col_actions3:
+            if st.button("🔄 Nova Análise", use_container_width=True, key="nova_analise_paste_tab10"):
+                st.session_state.pasted_data_analysis = None
+                st.session_state.pasted_structure = None
+                st.rerun()
 
 # =============================================================================
 # RODAPÉ
