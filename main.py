@@ -1,8 +1,8 @@
-# app_completo_analise_mom_gemini.py - App Analytics Platform Completo
+# app_completo.py - App Analytics Platform Completo com Classificador Multi-Clientes
 import streamlit as st
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
 import json
 import os
 from google.oauth2 import service_account
@@ -12,9 +12,6 @@ import plotly.graph_objects as go
 import plotly.figure_factory as ff
 import io
 import re
-from dateutil.relativedelta import relativedelta
-import warnings
-warnings.filterwarnings('ignore')
 
 # =============================================================================
 # SISTEMA DE AUTENTICAÇÃO
@@ -76,36 +73,24 @@ st.markdown("""
         border: none !important;
     }
     .metric-card {
-        background: white;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
         border-radius: 8px;
-        padding: 15px;
+        padding: 12px;
         margin: 5px;
         text-align: center;
-        border-left: 5px solid #4f46e5;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .metric-card-positive {
-        background: white;
-        border-radius: 8px;
-        padding: 15px;
-        margin: 5px;
-        text-align: center;
-        border-left: 5px solid #10b981;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .metric-card-negative {
-        background: white;
-        border-radius: 8px;
-        padding: 15px;
-        margin: 5px;
-        text-align: center;
-        border-left: 5px solid #ef4444;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     .stTabs [aria-selected="true"] {
         color: #4f46e5 !important;
         font-weight: 600 !important;
         border-bottom: 2px solid #4f46e5 !important;
+    }
+    .column-info {
+        background: #f0f9ff;
+        border-radius: 8px;
+        padding: 15px;
+        margin: 10px 0;
+        border-left: 4px solid #0ea5e9;
     }
     .data-card {
         background: white;
@@ -136,6 +121,14 @@ st.markdown("""
         margin: 10px 0;
         border-left: 4px solid #10b981;
     }
+    .gemini-analysis {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 25px;
+        margin: 20px 0;
+        box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+    }
     .analysis-section {
         background: white;
         border-radius: 10px;
@@ -143,6 +136,16 @@ st.markdown("""
         margin: 15px 0;
         border-left: 5px solid #4f46e5;
         box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    .gemini-response {
+        background: #f8fafc;
+        border-radius: 10px;
+        padding: 20px;
+        margin: 15px 0;
+        border-left: 4px solid #10b981;
+        white-space: pre-wrap;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 14px;
     }
     .filter-section {
         background: #f0f9ff;
@@ -158,102 +161,14 @@ st.markdown("""
         border-radius: 10px;
         margin-bottom: 20px;
     }
-    .comparative-card {
-        background: white;
-        border-radius: 10px;
-        padding: 20px;
-        margin: 15px 0;
-        border: 2px solid #e2e8f0;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-    }
-    .investment-grid {
-        background: white;
-        border-radius: 10px;
-        padding: 20px;
-        margin: 15px 0;
-        border: 1px solid #e2e8f0;
-    }
-    .platform-comparison {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 20%);
-        color: white;
-        border-radius: 12px;
-        padding: 25px;
-        margin: 20px 0;
-        box-shadow: 0 8px 15px rgba(0,0,0,0.1);
-    }
-    .trend-indicator {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-size: 12px;
-        font-weight: bold;
-        margin-left: 5px;
-    }
-    .trend-up {
-        background-color: #10b981;
-        color: white;
-    }
-    .trend-down {
-        background-color: #ef4444;
-        color: white;
-    }
-    .trend-neutral {
-        background-color: #6b7280;
-        color: white;
-    }
-    .comparative-table {
-        background: white;
-        border-radius: 8px;
-        overflow: hidden;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        margin: 10px 0;
-    }
-    .platform-card {
+    .data-table {
         background: white;
         border-radius: 8px;
         padding: 15px;
-        margin: 10px;
-        border-top: 4px solid #4f46e5;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    .client-card {
-        background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-        color: white;
-        border-radius: 10px;
-        padding: 20px;
         margin: 10px 0;
-    }
-    .month-comparison {
-        background: #f8fafc;
-        border-radius: 10px;
-        padding: 20px;
-        margin: 15px 0;
-        border: 2px dashed #cbd5e1;
-    }
-    .product-performance {
-        background: white;
-        border-radius: 10px;
-        padding: 20px;
-        margin: 15px 0;
-        border-top: 5px solid #10b981;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-    }
-    .creative-highlight {
-        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-        color: white;
-        border-radius: 10px;
-        padding: 20px;
-        margin: 15px 0;
-    }
-    .kpi-card {
-        background: white;
-        border-radius: 10px;
-        padding: 20px;
-        margin: 10px;
-        border: 1px solid #e2e8f0;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
-    .yoy-analysis {
+    .campaign-classifier {
         background: linear-gradient(135deg, #10b981 0%, #059669 100%);
         color: white;
         border-radius: 12px;
@@ -261,46 +176,26 @@ st.markdown("""
         margin: 20px 0;
         box-shadow: 0 8px 15px rgba(0,0,0,0.1);
     }
-    .scenario-input {
-        background: #f8fafc;
+    .classifier-result {
+        background: #d1fae5;
         border-radius: 10px;
         padding: 20px;
         margin: 15px 0;
-        border: 2px solid #e2e8f0;
+        border-left: 5px solid #059669;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     }
-    .text-analysis {
-        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    .client-filter {
+        background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
         color: white;
-        border-radius: 12px;
-        padding: 25px;
-        margin: 20px 0;
-        box-shadow: 0 8px 15px rgba(0,0,0,0.1);
-    }
-    .gemini-response {
-        background: #f8fafc;
         border-radius: 10px;
-        padding: 20px;
-        margin: 15px 0;
-        border-left: 4px solid #10b981;
-        white-space: pre-wrap;
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        font-size: 14px;
-    }
-    .data-input-box {
-        background: #f1f5f9;
-        border-radius: 8px;
         padding: 15px;
         margin: 10px 0;
-        font-family: 'Monaco', 'Menlo', monospace;
-        font-size: 13px;
-        border: 1px solid #cbd5e1;
-        min-height: 200px;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # Título
-st.markdown('<div class="header-gradient"><h1>📊 Agente Performance - Análise Completa</h1></div>', unsafe_allow_html=True)
+st.markdown('<div class="header-gradient"><h1>📊 Agente Performance</h1></div>', unsafe_allow_html=True)
 
 # =============================================================================
 # CONFIGURAÇÃO GEMINI
@@ -345,57 +240,167 @@ else:
 # FUNÇÕES GEMINI
 # =============================================================================
 
-def analyze_yoy_data_with_gemini(data_dict, context_input=""):
-    """Analisa dados YoY com Gemini"""
+def generate_gemini_analysis(df_filtered, analysis_type="overall", user_instructions=""):
+    """Gera análise com Gemini"""
     
     if not modelo_texto:
         return "⚠️ Gemini não configurado."
     
+    if df_filtered.empty:
+        return "❌ Nenhum dado disponível."
+    
     try:
-        # Construir prompt
+        num_records = len(df_filtered)
+        has_campaigns = 'campaign' in df_filtered.columns
+        has_date = 'date' in df_filtered.columns
+        
+        # Formatar datas se disponível
+        date_info = "N/A"
+        if has_date and 'date' in df_filtered.columns and not df_filtered['date'].isna().all():
+            try:
+                if not pd.api.types.is_datetime64_any_dtype(df_filtered['date']):
+                    df_filtered['date'] = pd.to_datetime(df_filtered['date'], errors='coerce')
+                
+                valid_dates = df_filtered['date'].dropna()
+                if len(valid_dates) > 0:
+                    min_date = valid_dates.min()
+                    max_date = valid_dates.max()
+                    if isinstance(min_date, pd.Timestamp) and isinstance(max_date, pd.Timestamp):
+                        date_info = f"{min_date.strftime('%d/%m/%Y')} a {max_date.strftime('%d/%m/%Y')}"
+            except:
+                date_info = "N/A"
+        
+        # Informações gerais
+        general_info = f"""
+        ## 📊 CONTEXTO GERAL:
+        - **Total de registros:** {num_records:,}
+        - **Período:** {date_info}
+        - **Colunas disponíveis:** {len(df_filtered.columns)}
+        - **Campanhas:** {df_filtered['campaign'].nunique() if has_campaigns else 'N/A'}
+        """
+        
+        # Análise de campanhas
+        campaign_analysis = ""
+        if has_campaigns and 'campaign' in df_filtered.columns:
+            try:
+                campaign_stats = df_filtered['campaign'].value_counts()
+                campaign_analysis = f"""
+                ## 🎯 ANÁLISE DE CAMPANHAS:
+                - **Total de campanhas:** {len(campaign_stats)}
+                - **Top 5 campanhas por volume:**
+                """
+                for i, (campaign, count) in enumerate(campaign_stats.head(5).items(), 1):
+                    campaign_name = str(campaign)[:30] + "..." if len(str(campaign)) > 30 else str(campaign)
+                    campaign_analysis += f"  {i}. **{campaign_name}**: {count:,} registros\n"
+            except:
+                campaign_analysis = "\n## 🎯 ANÁLISE DE CAMPANHAS: (Erro na análise)\n"
+        
+        # Análise de métricas
+        numeric_cols = []
+        for col in df_filtered.columns:
+            try:
+                if pd.api.types.is_numeric_dtype(df_filtered[col]):
+                    numeric_cols.append(col)
+                else:
+                    sample = df_filtered[col].dropna().head(10)
+                    if len(sample) > 0:
+                        pd.to_numeric(sample, errors='raise')
+                        numeric_cols.append(col)
+            except:
+                continue
+        
+        metric_analysis = ""
+        if numeric_cols:
+            important_metrics = []
+            priority_metrics = ['spend', 'revenue', 'conversions', 'impressions', 'clicks', 'cpc', 'cpm', 'ctr', 'roas']
+            
+            for metric in priority_metrics:
+                for col in numeric_cols:
+                    if metric in col.lower():
+                        important_metrics.append(col)
+                        break
+            
+            if not important_metrics:
+                important_metrics = numeric_cols[:5]
+            
+            metric_analysis = "## 📈 MÉTRICAS PRINCIPAIS:\n"
+            for metric in important_metrics[:8]:
+                if metric in df_filtered.columns:
+                    try:
+                        metric_data = pd.to_numeric(df_filtered[metric], errors='coerce').dropna()
+                        if len(metric_data) > 0:
+                            total = metric_data.sum()
+                            avg = metric_data.mean()
+                            metric_analysis += f"\n**{metric}**:\n"
+                            metric_analysis += f"- **Total:** {total:,.2f}\n"
+                            metric_analysis += f"- **Média:** {avg:,.2f}\n"
+                    except:
+                        continue
+        
+        # Dadosource analysis
+        datasource_analysis = ""
+        if 'datasource' in df_filtered.columns:
+            try:
+                ds_stats = df_filtered['datasource'].value_counts()
+                datasource_analysis = "\n## 📱 DATA SOURCES:\n"
+                for ds, count in ds_stats.head().items():
+                    percentage = (count / num_records) * 100
+                    datasource_analysis += f"- **{ds}**: {count:,} registros ({percentage:.1f}%)\n"
+            except:
+                datasource_analysis = "\n## 📱 DATA SOURCES: (Erro na análise)\n"
+        
+        # Sample data
+        try:
+            sample_df = df_filtered.head(20).copy()
+            for col in sample_df.columns:
+                sample_df[col] = sample_df[col].astype(str)
+            sample_data = sample_df.to_string()
+        except:
+            sample_data = "Erro ao gerar amostra"
+        
+        # Build prompt
+        if analysis_type == "overall":
+            focus_text = "ANÁLISE GERAL DE PERFORMANCE"
+        elif analysis_type == "trends":
+            focus_text = "ANÁLISE DE TENDÊNCIAS"
+        elif analysis_type == "efficiency":
+            focus_text = "ANÁLISE DE EFICIÊNCIA"
+        else:
+            focus_text = "ANÁLISE COMPLETA"
+        
         prompt = f"""
-        # 📊 ANÁLISE YoY (Year-over-Year) - RELATÓRIO DE PERFORMANCE
+        # {focus_text} - RELATÓRIO EXECUTIVO
         
-        ## DADOS COMPARATIVOS:
+        {general_info}
         
-        ### INVESTIMENTO:
-        - Ano Atual: R$ {data_dict.get('investimento_atual', 0):,.0f}
-        - Ano Anterior: R$ {data_dict.get('investimento_anterior', 0):,.0f}
-        - Variação YoY: {data_dict.get('investimento_yoy', 0):+.1f}%
+        {campaign_analysis}
         
-        ### SESSÕES:
-        - Ano Atual: {data_dict.get('sessoes_atual', 0):,.0f}
-        - Ano Anterior: {data_dict.get('sessoes_anterior', 0):,.0f}
-        - Variação YoY: {data_dict.get('sessoes_yoy', 0):+.1f}%
+        {metric_analysis}
         
-        ### ENGAJAMENTO:
-        - Ano Atual: {data_dict.get('engajamento_atual', 0):,.0f}
-        - Ano Anterior: {data_dict.get('engajamento_anterior', 0):,.0f}
-        - Variação YoY: {data_dict.get('engajamento_yoy', 0):+.1f}%
+        {datasource_analysis}
         
-        ### VIEWS:
-        - Ano Atual: {data_dict.get('views_atual', 0):,.0f}
-        - Ano Anterior: {data_dict.get('views_anterior', 0):,.0f}
-        - Variação YoY: {data_dict.get('views_yoy', 0):+.1f}%
+        ## 🎯 FOCO DA ANÁLISE:
+        {analysis_type.upper()}
         
-        ## CONTEXTO ADICIONAL FORNECIDO:
-        {context_input if context_input else "Nenhum contexto adicional fornecido."}
+        ## 📝 INSTRUÇÕES DO USUÁRIO:
+        {user_instructions if user_instructions else "Forneça uma análise completa do desempenho geral."}
         
-        ## TAREFA:
+        ## 📋 DADOS DE AMOSTRA (20 primeiros registros):
+        {sample_data}
+        
+        ## 📊 TAREFA:
         
         Analise os dados acima e crie um relatório executivo em português com:
         
         1. **📈 RESUMO EXECUTIVO** (1-2 parágrafos)
-        2. **💰 ANÁLISE FINANCEIRA** (eficiência do investimento, ROI implícito)
-        3. **📊 ANÁLISE DE PERFORMANCE** (sessões vs engajamento vs views)
-        4. **🔍 INSIGHTS ESTRATÉGICOS** (3-5 insights principais baseados nos dados)
-        5. **🎯 PONTOS DE ATENÇÃO** (o que precisa ser monitorado ou ajustado)
-        6. **🚀 RECOMENDAÇÕES ACIONÁVEIS** (5-7 recomendações específicas)
-        7. **📅 CONCLUSÃO** (visão geral e perspectiva futura)
-        
-        Seja específico, baseado em dados, prático e estratégico.
-        Use números e percentuais nos insights.
-        Destaque tanto os pontos fortes quanto as oportunidades de melhoria.
+        2. **🎯 ANÁLISE DAS CAMPANHAS** (se disponível)
+        3. **💰 ANÁLISE FINANCEIRA** (investimento, ROI, eficiência)
+        4. **📊 ANÁLISE DE MÉTRICAS** (principais KPIs, tendências)
+        5. **🔍 INSIGHTS ESTRATÉGICOS** (3-5 insights principais)
+        6. **🚀 RECOMENDAÇÕES ACIONÁVEIS** (5-7 recomendações)
+        7. **📅 PRÓXIMOS PASSOS** (plano de ação)
+
+        Seja específico, baseado em dados e prático.
         """
         
         with st.spinner("🤖 Gemini está analisando..."):
@@ -405,69 +410,54 @@ def analyze_yoy_data_with_gemini(data_dict, context_input=""):
     except Exception as e:
         return f"❌ Erro: {str(e)[:200]}"
 
-def analyze_text_data_with_gemini(text_data, analysis_type="complete"):
-    """Analisa dados em texto com Gemini"""
+def generate_slides_description(gemini_analysis_report, user_instructions=""):
+    """Gera descrição do que colocar em cada slide baseada no relatório Gemini"""
     
     if not modelo_texto:
         return "⚠️ Gemini não configurado."
     
-    if not text_data or text_data.strip() == "":
-        return "❌ Nenhum dado fornecido para análise."
+    if not gemini_analysis_report or gemini_analysis_report.startswith("❌") or gemini_analysis_report.startswith("⚠️"):
+        return "❌ Nenhuma análise disponível para criar slides."
     
     try:
-        # Construir prompt baseado no tipo de análise
-        analysis_types = {
-            "complete": "ANÁLISE COMPLETA",
-            "financial": "ANÁLISE FINANCEIRA",
-            "performance": "ANÁLISE DE PERFORMANCE",
-            "insights": "EXTRAÇÃO DE INSIGHTS"
-        }
-        
-        analysis_focus = analysis_types.get(analysis_type, "ANÁLISE COMPLETA")
-        
         prompt = f"""
-        # 📊 {analysis_focus} - DADOS EM FORMATO DE TEXTO
+        # 📊 DESCRIÇÃO PARA SLIDES DE APRESENTAÇÃO
         
-        ## DADOS FORNECIDOS:
-        ```
-        {text_data}
-        ```
+        ## RELATÓRIO GEMINI COMPLETO:
+        {gemini_analysis_report}
+        
+        ## INSTRUÇÕES ADICIONAIS:
+        {user_instructions if user_instructions else "Baseie-se no relatório para criar uma descrição do que colocar em cada slide."}
         
         ## TAREFA:
-        
-        1. **ESTRUTURAR OS DADOS** (identifique padrões, categorias e métricas)
-        2. **EXTRAIR INFORMAÇÕES NUMÉRICAS** (valores, percentuais, tendências)
-        3. **IDENTIFICAR RELAÇÕES E CORRELAÇÕES** (entre diferentes métricas)
-        4. **GERAR INSIGHTS ESTRATÉGICOS** (3-5 insights principais)
-        5. **CRIAR RESUMO EXECUTIVO** (1-2 parágrafos)
-        6. **SUGERIR PRÓXIMOS PASSOS** (ações recomendadas)
-        
-        Para cada seção, seja específico e mencione números concretos quando disponíveis.
-        
-        Estruture sua resposta em:
-        
-        ## 📋 DADOS ESTRUTURADOS
-        [Apresente os dados de forma organizada, em tabelas se possível]
-        
-        ## 📈 ANÁLISE NUMÉRICA
-        [Análise quantitativa dos dados]
-        
-        ## 🔍 INSIGHTS PRINCIPAIS
-        [Lista de insights com explicação]
-        
-        ## 🎯 RECOMENDAÇÕES
-        [Recomendações acionáveis]
-        
-        ## 📝 RESUMO EXECUTIVO
-        [Resumo conciso]
+        Com base no relatório Gemini acima, crie uma estrutura de relatório em slides (descrição em formato de texto de como cada slide deve vir) de performance de campanha com:
+
+ARQUITETURA DA APRESENTAÇÃO:
+1. CAPA: Esta é uma análise da estrutura lógica e do design visual do slide apresentado, focada em sua arquit
+2. AGENDA/CONTEXTUALIZAÇÃO: Slide introdutório
+3. SLIDES DE DETALHAMENTO: [Descreva padrão identificado]
+4. SLIDES ANALÍTICOS: [Descreva padrão identificado]
+5. CONCLUSÕES/RECOMENDAÇÕES: Slide final com insights
+
+PADRÕES ESTRUTURAIS IDENTIFICADOS:
+- Hierarquia visual: [Descrição da hierarquia]
+- Elementos recorrentes: [Lista de elementos]
+- Densidade informacional: [Padrão identificado]
+
+DIRETRIZES PARA RELATÓRIO DE PERFORMANCE:
+1. Para cada slide, mantenha a estrutura de: [Título claro] + [Dados chave] + [Visualização apropriada] + [Insight breve]
+2. Use a progressão lógica: Contexto → Métricas → Análise → Insights → Recomendações
+3. Aplique consistência visual em: cores, tipografia, layout de gráficos
+
+Gere uma apresentação completa aplicando ESTA ESTRUTURA ESPECÍFICA a um relatório de performance de campanha digital.
         """
         
-        with st.spinner("🤖 Gemini está analisando os dados..."):
+        with st.spinner("🤖 Gerando descrição dos slides..."):
             response = modelo_texto.generate_content(prompt)
             return response.text
     
     except Exception as e:
-        return f"❌ Erro: {str(e)[:200]}"
+        return f"❌ Erro ao gerar slides: {str(e)[:200]}"
 
 # =============================================================================
 # CONEXÃO BIGQUERY
@@ -528,56 +518,21 @@ def get_bigquery_client():
         return None
 
 @st.cache_data(ttl=3600)
-def load_client_data(_client, client_name, start_date=None, end_date=None, data_sources=None):
-    """Carrega dados específicos por cliente"""
+def load_all_columns_data(_client, data_inicio=None, data_fim=None, data_sources=None, filtro_cliente="Todos", limit=50000):
+    """Carrega TODAS as colunas e identifica clientes pelo account_name"""
     try:
-        st.info(f"🔍 Carregando dados para {client_name}...")
-        
-        # Mapear nomes de clientes para filtros no account_name
-        client_mapping = {
-            "Syngenta": ["SYNGENTA", "CROP", "AGRO"],
-            "Golden Harvest Brasil": ["GOLDEN HARVEST", "GOLDENHARVEST"],
-            "Nidera (oficial)": ["NIDERA"],
-            "NK Seeds (Oficial - Lab)": ["NK SEEDS", "NKSEEDS"],
-            "EuroChem Fertilizantes Tocantins": ["EUROCHEM", "TOCANTINS"],
-            "Grupo Vittia": ["VITTIA", "GRUPO VITTIA"]
-        }
+        st.info("🔍 Carregando dados...")
         
         query = """
-        SELECT 
-            date,
-            campaign,
-            datasource,
-            spend,
-            impressions,
-            clicks,
-            conversions,
-            cpc,
-            ctr,
-            roas,
-            account_name,
-            LOWER(account_name) as account_name_lower
+        SELECT *
         FROM `macfor-media-flow.ads.app_view_campaigns`
         """
         
         conditions = []
-        
-        # Filtrar por cliente
-        if client_name != "Todos":
-            if client_name in client_mapping:
-                client_terms = client_mapping[client_name]
-                client_conditions = []
-                for term in client_terms:
-                    client_conditions.append(f"LOWER(account_name) LIKE '%{term.lower()}%'")
-                conditions.append(f"({' OR '.join(client_conditions)})")
-        
-        # Filtrar por data
-        if start_date:
-            conditions.append(f"DATE(date) >= DATE('{start_date}')")
-        if end_date:
-            conditions.append(f"DATE(date) <= DATE('{end_date}')")
-        
-        # Filtrar por data sources
+        if data_inicio:
+            conditions.append(f"DATE(date) >= DATE('{data_inicio}')")
+        if data_fim:
+            conditions.append(f"DATE(date) <= DATE('{data_fim}')")
         if data_sources and len(data_sources) > 0:
             ds_str = ", ".join([f"'{ds}'" for ds in data_sources])
             conditions.append(f"datasource IN ({ds_str})")
@@ -585,652 +540,644 @@ def load_client_data(_client, client_name, start_date=None, end_date=None, data_
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
         
-        query += " ORDER BY date DESC"
+        query += f" ORDER BY date DESC"
         
         df = _client.query(query).to_dataframe()
         
         if df.empty:
-            st.warning(f"Nenhum dado encontrado para {client_name}")
+            st.warning("Nenhum dado encontrado")
             return pd.DataFrame()
 
-        # Processar datas
         if 'date' in df.columns:
             df['date'] = pd.to_datetime(df['date'], errors='coerce')
-            df['year_month'] = df['date'].dt.strftime('%Y-%m')
-            df['month'] = df['date'].dt.month
-            df['year'] = df['date'].dt.year
         
-        # Extrair categorias de campanha
-        df = extract_campaign_categories(df)
+        def identificar_cliente_por_account_name(account_name):
+            if pd.isna(account_name):
+                return "Outros"
+            
+            account_str = str(account_name).strip()
+            account_upper = account_str.upper()
+            
+            if "SYNGENTA" in account_upper:
+                return "Syngenta"
+            
+            return account_str
         
-        return df
+        if 'account_name' in df.columns:
+            df['cliente_identificado'] = df['account_name'].apply(identificar_cliente_por_account_name)
+            
+            if filtro_cliente != "Todos":
+                df = df[df['cliente_identificado'] == filtro_cliente].copy()
+        else:
+            df['cliente_identificado'] = "Desconhecido"
+            
+        df = df.head(limit)
+        df_classificado = classificar_campanhas_multi_cliente(df)
+        
+        return df_classificado
     
     except Exception as e:
-        st.error(f"Erro ao carregar dados: {str(e)}")
+        st.error(f"Erro: {str(e)}")
         return pd.DataFrame()
 
-def extract_campaign_categories(df):
-    """Extrai categorias de campanha"""
-    if 'campaign' not in df.columns:
+# =============================================================================
+# FUNÇÕES AUXILIARES
+# =============================================================================
+
+def safe_metric(label, value, delta=None):
+    """Função segura para métricas"""
+    try:
+        if pd.isna(value):
+            value = 0
+        
+        if isinstance(value, (int, np.integer)):
+            display_value = f"{int(value):,}"
+        elif isinstance(value, (float, np.floating)):
+            if abs(value) < 0.01:
+                display_value = f"{value:.4f}"
+            elif abs(value) < 1:
+                display_value = f"{value:.3f}"
+            elif abs(value) < 1000:
+                display_value = f"{value:.2f}"
+            else:
+                display_value = f"{value:,.0f}"
+        else:
+            try:
+                num_val = float(value)
+                display_value = f"{num_val:,.2f}"
+            except:
+                display_value = str(value)
+        
+        if delta is not None:
+            if pd.isna(delta):
+                delta = None
+            elif isinstance(delta, (int, float, np.integer, np.floating)):
+                delta = f"{delta:+.2f}"
+        
+        return st.metric(label, display_value, delta=delta)
+    
+    except:
+        return st.metric(label, "Erro")
+
+def identificar_colunas_numericas(df):
+    """Identifica colunas numéricas"""
+    if df.empty:
+        return []
+    
+    colunas_numericas = []
+    
+    for col in df.columns:
+        try:
+            if pd.api.types.is_numeric_dtype(df[col]):
+                colunas_numericas.append(col)
+            else:
+                amostra = df[col].dropna().head(10)
+                if len(amostra) > 0:
+                    try:
+                        pd.to_numeric(amostra)
+                        colunas_numericas.append(col)
+                    except:
+                        pass
+        except:
+            continue
+    
+    return colunas_numericas
+
+def analisar_coluna(df, coluna):
+    """Analisa uma coluna específica"""
+    if df.empty or coluna not in df.columns:
+        return None
+    
+    try:
+        dados_coluna = df[coluna]
+        
+        total = int(len(dados_coluna))
+        nao_nulos = int(dados_coluna.notna().sum())
+        nulos = int(dados_coluna.isna().sum())
+        valores_unicos = int(dados_coluna.nunique())
+        
+        if total > 0:
+            percentual_nulos = float((nulos / total) * 100)
+        else:
+            percentual_nulos = 0.0
+        
+        analise = {
+            'nome': coluna,
+            'tipo': str(dados_coluna.dtype),
+            'total': total,
+            'nao_nulos': nao_nulos,
+            'nulos': nulos,
+            'percentual_nulos': percentual_nulos,
+            'valores_unicos': valores_unicos
+        }
+        
+        if pd.api.types.is_numeric_dtype(dados_coluna):
+            dados_validos = dados_coluna.dropna()
+            if len(dados_validos) > 0:
+                analise.update({
+                    'tipo_detalhado': 'Numérica',
+                    'min': float(dados_validos.min()),
+                    'max': float(dados_validos.max()),
+                    'media': float(dados_validos.mean()),
+                    'mediana': float(dados_validos.median()),
+                    'desvio_padrao': float(dados_validos.std()),
+                    'q1': float(dados_validos.quantile(0.25)),
+                    'q3': float(dados_validos.quantile(0.75))
+                })
+            else:
+                analise.update({'tipo_detalhado': 'Numérica (vazia)'})
+        elif dados_coluna.dtype == 'object':
+            value_counts = dados_coluna.value_counts()
+            analise.update({
+                'tipo_detalhado': 'Texto/Categórica',
+                'valores_mais_comuns': value_counts.head(10).to_dict(),
+                'valor_mais_frequente': value_counts.index[0] if len(value_counts) > 0 else None,
+                'frequencia_valor_mais_comum': int(value_counts.iloc[0]) if len(value_counts) > 0 else 0
+            })
+        elif pd.api.types.is_datetime64_any_dtype(dados_coluna):
+            dados_validos = dados_coluna.dropna()
+            if len(dados_validos) > 0:
+                analise.update({
+                    'tipo_detalhado': 'Data',
+                    'data_minima': dados_validos.min(),
+                    'data_maxima': dados_validos.max(),
+                    'intervalo_dias': int((dados_validos.max() - dados_validos.min()).days)
+                })
+            else:
+                analise.update({'tipo_detalhado': 'Data (vazia)'})
+        else:
+            analise.update({'tipo_detalhado': 'Outro'})
+            
+        return analise
+        
+    except Exception as e:
+        return {
+            'nome': coluna,
+            'tipo': 'Erro',
+            'tipo_detalhado': f'Erro na análise: {str(e)[:50]}',
+            'total': 0,
+            'nao_nulos': 0,
+            'nulos': 0,
+            'percentual_nulos': 0.0,
+            'valores_unicos': 0
+        }
+
+def criar_visualizacao_coluna(df, coluna):
+    """Cria visualização para coluna"""
+    if df.empty or coluna not in df.columns:
+        return None
+    
+    try:
+        dados = df[coluna].dropna()
+        
+        if len(dados) == 0:
+            return None
+        
+        if pd.api.types.is_numeric_dtype(df[coluna]):
+            dados_numeric = pd.to_numeric(dados, errors='coerce').dropna()
+            if len(dados_numeric) == 0:
+                return None
+            
+            fig = px.histogram(
+                x=dados_numeric,
+                nbins=min(50, len(dados_numeric)),
+                title=f"Distribuição de {coluna}",
+                marginal="box"
+            )
+            return fig
+        
+        elif df[coluna].nunique() <= 50:
+            contagem = df[coluna].value_counts().head(20)
+            if len(contagem) == 0:
+                return None
+            
+            fig = px.bar(
+                x=contagem.index.astype(str),
+                y=contagem.values,
+                title=f"Top 20 Valores em {coluna}",
+                labels={'x': coluna, 'y': 'Contagem'}
+            )
+            fig.update_xaxes(tickangle=45)
+            return fig
+        
+        elif pd.api.types.is_datetime64_any_dtype(df[coluna]):
+            try:
+                dados_dt = pd.to_datetime(dados, errors='coerce').dropna()
+                if len(dados_dt) == 0:
+                    return None
+                
+                contagem_diaria = pd.Series(dados_dt.dt.date).value_counts().sort_index().reset_index()
+                contagem_diaria.columns = ['data', 'contagem']
+                
+                fig = px.line(
+                    contagem_diaria,
+                    x='data',
+                    y='contagem',
+                    title=f"Frequência por Data - {coluna}"
+                )
+                return fig
+            except:
+                return None
+        
+        return None
+    except Exception as e:
+        st.error(f"Erro ao criar visualização: {str(e)[:100]}")
+        return None
+
+# =============================================================================
+# FUNÇÕES PARA CLASSIFICADOR DE CAMPANHAS MULTI-CLIENTES
+# =============================================================================
+
+def extrair_categorias_campanha(nome_campanha):
+    """Extrai categorias de campanha usando regex e análise de padrões"""
+    if not nome_campanha or pd.isna(nome_campanha):
+        return {}
+    
+    nome_str = str(nome_campanha).upper()
+    
+    categorias = {
+        'iniciativa': None,
+        'produto': None,
+        'cultura': None,
+        'categoria': None,
+        'tipo_campanha': None,
+        'objetivo': None,
+        'etapa_funil': None,
+        'editoria': None,
+        'po': None,
+        'agencia': None,
+        'plataforma': None,
+        'cliente': None
+    }
+    
+    padroes = {
+        'etapa_funil': [
+            'UP', 'MID', 'LOWER', 'TOF', 'MOF', 'BOF', 'TOP', 'MIDDLE', 'BOTTOM',
+            'AWARENESS', 'CONSIDERATION', 'CONVERSION', 'RETENTION',
+            'DESCOBERTA', 'CONSIDERACAO', 'CONVERSAO', 'RETENCAO'
+        ],
+        
+        'tipo_campanha': [
+            'VIDEO', 'DISPLAY', 'SEARCH', 'SOCIAL', 'EMAIL', 'SMS', 'PUSH',
+            'NATIVO', 'NATIVE', 'PROGRAMATICA', 'PROGRAMMATIC',
+            'PERFORMANCE', 'BRANDING', 'BRAND', 'DIRECT', 'DIRECT_RESPONSE'
+        ],
+        
+        'objetivo': [
+            'AWARENESS', 'CONSIDERATION', 'CONVERSION', 'LEAD', 'SALES',
+            'TRAFFIC', 'ENGAGEMENT', 'INSTALL', 'VIEWS', 'CLICKS',
+            'ALCANCE', 'CONVERSAO', 'LEADS', 'VENDAS', 'TRAFEGO',
+            'ENGAJAMENTO', 'INSTALACOES', 'VISUALIZACOES', 'CLIQUES'
+        ],
+        
+        'plataforma': [
+            'GOOGLE', 'FACEBOOK', 'INSTAGRAM', 'TIKTOK', 'LINKEDIN', 'TWITTER',
+            'YOUTUBE', 'PINTEREST', 'SNAPCHAT', 'META', 'TIKTOK', 'BING',
+            'DV360', 'TRADEDESK', 'AMAZON', 'APPLE', 'SPOTIFY'
+        ],
+        
+        'agencia': [
+            'MACFOR', 'OGILVY', 'PUBLICIS', 'WPP', 'OMNICOM', 'DENTSU',
+            'HAVAS', 'IPG', 'ACCENTURE', 'DELOITTE', 'PWC', 'KPMG'
+        ],
+        
+        'cultura': [
+            'SOJA', 'MILHO', 'CAFE', 'ALGODAO', 'CANADEACUCAR', 'CANA',
+            'TRIGO', 'ARROZ', 'FEIJAO', 'MANDIOCA', 'LARANJA', 'UVA',
+            'TOMATE', 'BATATA', 'CEVADA', 'AVEIA', 'GIRASSOL'
+        ],
+        
+        'produto': [
+            'ACTARA','ALADE-MITRION',
+            'AMISTAR','AMISTAR_TOP',
+            'AMPLIGO','ARVATICO',
+            'AVICTA_COMPLETO','AXIAL',
+            'BRAVONIL','BRAVONIL_TOP',
+            'BRAVONIL720','CALARIS',
+            'CALARIS_MA','CALIPEN_SC',
+            'CLARIVA_SKY','CRUISER_ADVANCED',
+            'CRUISER_OPTI',
+            'CRUISER_TURBO','CURYOM',
+            'CYPRESS','DUAL_GOLD',
+            'DURIVO','EDDUS',
+            'ELATUS',
+            'ELESTAL_NEO',
+            'ENGEO_PLENO_S','FORTENZA',
+            'FORTENZA_DUO',
+            'FORTENZA_ELITE','FORTENZA_VIP_TURBO',
+            'GROVER',
+            'INFLUX',
+            'INSTIVO','INVICT',
+            'JOINER',
+            'MAXIM_QUATTRO','MINECTO_PRO',
+            'MIRAVIS','MIRAVIS_DUO',
+            'MIRAVIS_PRO',
+            'MODDUS','NEMATOIDES',
+            'PERGADO_MZ','PLINAZOLIN',
+            'POLYTRIN','PRIORI_TOP',
+            'PRIORI_XTRA',
+            'PROCLAIM','REBRON',
+            'REGLONE',
+            'REVUS_OPTI',
+            'RIDOMIL_GOLD','SCORE_FLEXI',
+            'SPONTA','VERDADERO',
+            'VERDAVIS','VOLIAM_FLEXI',
+            'VOLIAM_TARGO','CERTANO',
+            'RIZOLIQ_LLI','RIZOLIQ_UHC',
+            'ALADE',
+            'MITRION',
+            'POLO_500_SC',
+            'ADEPIDYN',
+            'ORONDIS_FLEXI','SCORE',
+            'ORONDIS_ULTRA','INZAK_ZEON',
+            'REVERB','MEGAFOL',
+            'AEVO',
+            'YIELDON','FRONDEO',
+            'FLEXSTAR_GT',
+            'ELESTAL','FANTON',
+            'JOINER_PRO','INVENCIS',
+            'SEEKER','CRESTIVO',
+            'VIVA','RIZODERMA',
+            'RIZOFOS',
+            'SIGNUM','NETURE',
+            'MIRAVIS_XTRA','VANIVA',
+            'CRUISER_OPTI-CRUISER_ADVANCED',
+            'VICTRATO_GOLD',
+            'BOUNDARY_EC','VICTRATO'
+        ]
+    }
+    
+    po_pattern = r'\bPO[_-]?(\d+)\b'
+    po_match = re.search(po_pattern, nome_str, re.IGNORECASE)
+    if po_match:
+        categorias['po'] = f"PO{po_match.group(1)}"
+    
+    for agencia in padroes['agencia']:
+        if agencia in nome_str:
+            categorias['agencia'] = agencia
+            break
+    
+    for plataforma in padroes['plataforma']:
+        if plataforma in nome_str:
+            categorias['plataforma'] = plataforma
+            break
+    
+    for cultura in padroes['cultura']:
+        if cultura in nome_str:
+            categorias['cultura'] = cultura
+            break
+    
+    for produto in padroes['produto']:
+        if produto in nome_str:
+            categorias['produto'] = produto
+            break
+    
+    for tipo in padroes['tipo_campanha']:
+        if tipo in nome_str:
+            categorias['tipo_campanha'] = tipo
+            break
+    
+    for objetivo in padroes['objetivo']:
+        if objetivo in nome_str:
+            categorias['objetivo'] = objetivo
+            break
+    
+    for etapa in padroes['etapa_funil']:
+        if etapa in nome_str:
+            categorias['etapa_funil'] = etapa
+            break
+    
+    separadores = ['_', '-', '|', ' ', '__']
+    
+    for sep in separadores:
+        if sep in nome_str:
+            partes = nome_str.split(sep)
+            if len(partes) > 0:
+                primeira_parte = partes[0]
+                if len(primeira_parte) > 3 and primeira_parte not in padroes['plataforma']:
+                    categorias['iniciativa'] = primeira_parte
+    
+    clientes_padroes = {
+        'SYNGENTA': ['SYNGENTA', 'CROP', 'AGRO'],
+        'BAYER': ['BAYER', 'CROPSCIENCE'],
+        'BASF': ['BASF'],
+        'CORTEVA': ['CORTEVA', 'PIONEER'],
+        'NOVARTIS': ['NOVARTIS'],
+        'MONSANTO': ['MONSANTO'],
+        'JOHNSON': ['JOHNSON', 'JNJ'],
+        'PFIZER': ['PFIZER'],
+        'ROCHE': ['ROCHE'],
+        'MERCK': ['MERCK'],
+        'GLAXOSMITHKLINE': ['GSK', 'GLAXO'],
+        'ASTRAZENECA': ['ASTRAZENECA'],
+        'SANOFI': ['SANOFI']
+    }
+    
+    for cliente, padroes_cliente in clientes_padroes.items():
+        for padrao in padroes_cliente:
+            if padrao in nome_str:
+                categorias['cliente'] = cliente
+                break
+        if categorias['cliente']:
+            break
+    
+    return categorias
+
+def classificar_campanhas_multi_cliente(df, coluna_campanha='campaign'):
+    """Classifica campanhas para múltiplos clientes"""
+    if df.empty or coluna_campanha not in df.columns:
         return df
     
-    def categorize_campaign(campaign_name):
-        if pd.isna(campaign_name):
-            return {
-                'product': 'Desconhecido',
-                'category': 'Desconhecido',
-                'campaign_type': 'Desconhecido'
-            }
-        
-        name = str(campaign_name).upper()
-        
-        # Produtos Syngenta
-        products = [
-            'VICTRATO', 'VANIVA', 'REVERB', 'JOINER', 'CERTANO', 
-            'FLEXSTAR GT', 'ENGEO PLENO S', 'MIRAVIS DUO', 
-            'CRUISER', 'YIELDON', 'ELESTAL NEO', 'AMPLIGO',
-            'ACTARA', 'ALADE', 'MITRION', 'AMISTAR', 'ARVATICO',
-            'AVICTA', 'AXIAL', 'BRAVONIL', 'CALARIS', 'CALIPEN',
-            'CLARIVA', 'CURYOM', 'CYPRESS', 'DUAL GOLD', 'DURIVO',
-            'EDDUS', 'ELATUS', 'FORTENZA', 'GROVER', 'INFLUX',
-            'INSTIVO', 'INVICT', 'MAXIM', 'MINECTO', 'MIRAVIS',
-            'MODDUS', 'PERGADO', 'PLINAZOLIN', 'POLYTRIN', 'PRIORI',
-            'PROCLAIM', 'REBRON', 'REGLONE', 'REVUS', 'RIDOMIL',
-            'SCORE', 'SPONTA', 'VERDADERO', 'VERDAVIS', 'VOLIAM'
-        ]
-        
-        # Categorias
-        categories = [
-            'NEMATICIDA', 'INSETICIDA', 'FUNGICIDA', 'HERBICIDA',
-            'SEEDCARE', 'BIOLOGICO', 'FERTILIZANTE', 'REGULADOR'
-        ]
-        
-        # Tipos de campanha
-        campaign_types = [
-            'VIDEO', 'DISPLAY', 'SEARCH', 'SOCIAL', 'PERFORMANCE',
-            'BRANDING', 'AWARENESS', 'CONVERSION', 'ENGAGEMENT'
-        ]
-        
-        # Identificar produto
-        product_found = 'Desconhecido'
-        for prod in products:
-            if prod in name:
-                product_found = prod
-                break
-        
-        # Identificar categoria
-        category_found = 'Desconhecido'
-        for cat in categories:
-            if cat in name:
-                category_found = cat
-                break
-        
-        # Identificar tipo de campanha
-        campaign_type_found = 'Desconhecido'
-        for ct in campaign_types:
-            if ct in name:
-                campaign_type_found = ct
-                break
-        
-        return {
-            'product': product_found,
-            'category': category_found,
-            'campaign_type': campaign_type_found
-        }
+    classificacoes = []
     
-    # Aplicar categorização
-    categories = df['campaign'].apply(categorize_campaign)
-    df['product'] = categories.apply(lambda x: x['product'])
-    df['category'] = categories.apply(lambda x: x['category'])
-    df['campaign_type'] = categories.apply(lambda x: x['campaign_type'])
+    for idx, row in df.iterrows():
+        nome_campanha = row[coluna_campanha]
+        categorias = extrair_categorias_campanha(nome_campanha)
+        
+        categorias_preenchidas = sum(1 for v in categorias.values() if v is not None)
+        classificado = 'SIM' if categorias_preenchidas >= 3 else 'NÃO'
+        
+        classificacao = {
+            'nome_campanha_original': nome_campanha,
+            'classificado': classificado,
+            'categorias_identificadas': categorias_preenchidas
+        }
+        
+        for chave, valor in categorias.items():
+            classificacao[f'campaign_{chave}'] = valor
+        
+        classificacoes.append(classificacao)
+    
+    df_classificado = pd.DataFrame(classificacoes)
+    
+    if len(df_classificado) == len(df):
+        df_resultado = df.copy()
+        for col in df_classificado.columns:
+            if col != 'nome_campanha_original':
+                df_resultado[col] = df_classificado[col]
+        
+        return df_resultado
     
     return df
 
-# =============================================================================
-# FUNÇÕES DE ANÁLISE COMPARATIVA
-# =============================================================================
-
-def calculate_monthly_comparison(df, current_month, previous_month):
-    """Calcula comparação entre meses"""
-    
-    # Filtrar dados por mês
-    df_current = df[df['year_month'] == current_month].copy()
-    df_previous = df[df['year_month'] == previous_month].copy()
-    
-    if df_current.empty or df_previous.empty:
-        return None
-    
-    # Métricas principais
-    metrics = ['spend', 'impressions', 'clicks', 'conversions']
-    
-    comparison = {}
-    
-    for metric in metrics:
-        if metric in df_current.columns and metric in df_previous.columns:
-            current_val = df_current[metric].sum()
-            previous_val = df_previous[metric].sum()
-            
-            if previous_val != 0:
-                change_pct = ((current_val - previous_val) / previous_val) * 100
-            else:
-                change_pct = 0
-            
-            comparison[metric] = {
-                'current': current_val,
-                'previous': previous_val,
-                'change_pct': change_pct,
-                'change_abs': current_val - previous_val
-            }
-    
-    # Métricas calculadas
-    if 'spend' in df_current.columns and 'clicks' in df_current.columns:
-        current_cpc = df_current['spend'].sum() / df_current['clicks'].sum() if df_current['clicks'].sum() > 0 else 0
-        previous_cpc = df_previous['spend'].sum() / df_previous['clicks'].sum() if df_previous['clicks'].sum() > 0 else 0
-        
-        comparison['cpc'] = {
-            'current': current_cpc,
-            'previous': previous_cpc,
-            'change_pct': ((current_cpc - previous_cpc) / previous_cpc * 100) if previous_cpc > 0 else 0
-        }
-    
-    if 'impressions' in df_current.columns and 'clicks' in df_current.columns:
-        current_ctr = (df_current['clicks'].sum() / df_current['impressions'].sum() * 100) if df_current['impressions'].sum() > 0 else 0
-        previous_ctr = (df_previous['clicks'].sum() / df_previous['impressions'].sum() * 100) if df_previous['impressions'].sum() > 0 else 0
-        
-        comparison['ctr'] = {
-            'current': current_ctr,
-            'previous': previous_ctr,
-            'change_pct': ((current_ctr - previous_ctr) / previous_ctr * 100) if previous_ctr > 0 else 0
-        }
-    
-    return comparison
-
-def generate_investment_by_platform(df, month):
-    """Gera análise de investimento por plataforma"""
-    
-    df_month = df[df['year_month'] == month].copy()
-    
-    if df_month.empty:
-        return None
-    
-    # Agrupar por plataforma (datasource)
-    if 'datasource' in df_month.columns and 'spend' in df_month.columns:
-        platform_investment = df_month.groupby('datasource').agg({
-            'spend': 'sum',
-            'impressions': 'sum',
-            'clicks': 'sum',
-            'conversions': 'sum'
-        }).reset_index()
-        
-        # Calcular métricas adicionais
-        platform_investment['cpc'] = platform_investment['spend'] / platform_investment['clicks'].replace(0, np.nan)
-        platform_investment['ctr'] = (platform_investment['clicks'] / platform_investment['impressions'].replace(0, np.nan)) * 100
-        
-        # Ordenar por investimento
-        platform_investment = platform_investment.sort_values('spend', ascending=False)
-        
-        # Calcular percentuais
-        total_spend = platform_investment['spend'].sum()
-        platform_investment['spend_pct'] = (platform_investment['spend'] / total_spend * 100) if total_spend > 0 else 0
-        
-        return platform_investment
-    
-    return None
-
-def generate_product_performance(df, month):
-    """Gera análise de performance por produto"""
-    
-    df_month = df[df['year_month'] == month].copy()
-    
-    if df_month.empty or 'product' not in df_month.columns:
-        return None
-    
-    # Agrupar por produto
-    product_perf = df_month.groupby('product').agg({
-        'spend': 'sum',
-        'impressions': 'sum',
-        'clicks': 'sum',
-        'conversions': 'sum'
-    }).reset_index()
-    
-    # Calcular métricas
-    product_perf['cpc'] = product_perf['spend'] / product_perf['clicks'].replace(0, np.nan)
-    product_perf['ctr'] = (product_perf['clicks'] / product_perf['impressions'].replace(0, np.nan)) * 100
-    
-    # Ordenar por engajamento (clicks)
-    product_perf = product_perf.sort_values('clicks', ascending=False)
-    
-    return product_perf.head(20)
-
-def format_currency(value):
-    """Formata valor como moeda"""
-    try:
-        if pd.isna(value):
-            return "R$ 0"
-        return f"R$ {value:,.0f}".replace(",", ".")
-    except:
-        return f"R$ {value}"
-
-def format_percentage(value):
-    """Formata valor como porcentagem"""
-    try:
-        if pd.isna(value):
-            return "0%"
-        return f"{value:.1f}%"
-    except:
-        return f"{value}%"
-
-def get_trend_indicator(change_pct):
-    """Retorna indicador visual de tendência"""
-    if change_pct > 5:
-        return "🟢"
-    elif change_pct < -5:
-        return "🔴"
-    else:
-        return "🟡"
-
-# =============================================================================
-# FUNÇÕES PARA RELATÓRIO DETALHADO
-# =============================================================================
-
-def generate_detailed_report(df, current_month, previous_month, client_name):
-    """Gera relatório detalhado estilo dos exemplos"""
-    
-    # Dados dos meses
-    df_current = df[df['year_month'] == current_month].copy()
-    df_previous = df[df['year_month'] == previous_month].copy()
-    
-    if df_current.empty or df_previous.empty:
-        return "Dados insuficientes para gerar relatório"
-    
-    # Cálculos principais
-    current_spend = df_current['spend'].sum()
-    previous_spend = df_previous['spend'].sum()
-    spend_change_pct = ((current_spend - previous_spend) / previous_spend * 100) if previous_spend > 0 else 0
-    
-    current_clicks = df_current['clicks'].sum()
-    previous_clicks = df_previous['clicks'].sum()
-    clicks_change_pct = ((current_clicks - previous_clicks) / previous_clicks * 100) if previous_clicks > 0 else 0
-    
-    current_impressions = df_current['impressions'].sum()
-    previous_impressions = df_previous['impressions'].sum()
-    impressions_change_pct = ((current_impressions - previous_impressions) / previous_impressions * 100) if previous_impressions > 0 else 0
-    
-    current_conversions = df_current['conversions'].sum()
-    previous_conversions = df_previous['conversions'].sum()
-    conversions_change_pct = ((current_conversions - previous_conversions) / previous_conversions * 100) if previous_conversions > 0 else 0
-    
-    # Investimento por plataforma
-    platform_current = generate_investment_by_platform(df, current_month)
-    platform_previous = generate_investment_by_platform(df, previous_month)
-    
-    # Performance por produto
-    product_perf = generate_product_performance(df, current_month)
-    
-    # Performance por categoria
-    category_perf = generate_category_performance(df, current_month)
-    
-    # Construir relatório
-    report = f"""
-# 📊 RELATÓRIO DE PERFORMANCE - {client_name}
-## Período: {current_month} vs {previous_month}
-
----
-
-## 📈 RESUMO EXECUTIVO
-
-**Investimento Total:**
-- **{current_month}:** {format_currency(current_spend)}
-- **{previous_month}:** {format_currency(previous_spend)}
-- **Variação:** {format_percentage(spend_change_pct)} {get_trend_indicator(spend_change_pct)}
-
-**Engajamento:**
-- **Cliques {current_month}:** {current_clicks:,.0f}
-- **Variação:** {format_percentage(clicks_change_pct)} {get_trend_indicator(clicks_change_pct)}
-
-**Alcance:**
-- **Impressões {current_month}:** {current_impressions:,.0f}
-- **Variação:** {format_percentage(impressions_change_pct)} {get_trend_indicator(impressions_change_pct)}
-
-**Conversões:**
-- **Conversões {current_month}:** {current_conversions:,.0f}
-- **Variação:** {format_percentage(conversions_change_pct)} {get_trend_indicator(conversions_change_pct)}
-
----
-
-## 💰 INVESTIMENTO POR PLATAFORMA
-
-### {current_month}
-"""
-    
-    if platform_current is not None:
-        for _, row in platform_current.iterrows():
-            report += f"- **{row['datasource'].upper()}:** {format_currency(row['spend'])} ({row['spend_pct']:.1f}%)\n"
-    
-    report += f"\n### {previous_month}\n"
-    
-    if platform_previous is not None:
-        for _, row in platform_previous.iterrows():
-            report += f"- **{row['datasource'].upper()}:** {format_currency(row['spend'])} ({row['spend_pct']:.1f}%)\n"
-    
-    report += """
-
----
-
-## 🎯 TOP PRODUTOS POR ENGAGEMENT
-
-"""
-    
-    if product_perf is not None:
-        report += "| Produto | Investimento | Impressões | Cliques | CTR |\n"
-        report += "|---------|--------------|------------|---------|-----|\n"
-        for _, row in product_perf.head(10).iterrows():
-            ctr = row['ctr'] if not pd.isna(row['ctr']) else 0
-            report += f"| {row['product']} | {format_currency(row['spend'])} | {row['impressions']:,.0f} | {row['clicks']:,.0f} | {ctr:.2f}% |\n"
-    
-    report += """
-
----
-
-## 📊 PERFORMANCE POR CATEGORIA
-
-"""
-    
-    if category_perf is not None:
-        report += "| Categoria | Investimento | % Total | Cliques | CPC |\n"
-        report += "|-----------|--------------|---------|---------|-----|\n"
-        for _, row in category_perf.iterrows():
-            spend_pct = (row['spend'] / current_spend * 100) if current_spend > 0 else 0
-            cpc = row['cpc'] if not pd.isna(row['cpc']) else 0
-            report += f"| {row['category']} | {format_currency(row['spend'])} | {spend_pct:.1f}% | {row['clicks']:,.0f} | {format_currency(cpc)} |\n"
-    
-    report += """
-
----
-
-## 🔍 INSIGHTS ESTRATÉGICOS
-
-"""
-    
-    # Gerar insights baseados nos dados
-    insights = []
-    
-    if spend_change_pct > 0 and clicks_change_pct > spend_change_pct:
-        insights.append("**Eficiência em alta:** O crescimento em cliques superou o aumento de investimento, indicando maior eficiência nas campanhas.")
-    
-    if platform_current is not None and platform_previous is not None:
-        # Verificar mudanças na distribuição de investimento
-        platforms = set(platform_current['datasource']).union(set(platform_previous['datasource']))
-        for platform in platforms:
-            curr = platform_current[platform_current['datasource'] == platform]
-            prev = platform_previous[platform_previous['datasource'] == platform]
-            
-            if not curr.empty and not prev.empty:
-                curr_pct = curr['spend_pct'].iloc[0]
-                prev_pct = prev['spend_pct'].iloc[0]
-                
-                if abs(curr_pct - prev_pct) > 10:
-                    direction = "aumento" if curr_pct > prev_pct else "redução"
-                    insights.append(f"**Redistribuição estratégica:** {direction} significativa no investimento em {platform.upper()} ({prev_pct:.1f}% → {curr_pct:.1f}%).")
-    
-    if product_perf is not None and len(product_perf) > 0:
-        top_product = product_perf.iloc[0]['product']
-        if top_product != 'Desconhecido':
-            insights.append(f"**Produto destaque:** {top_product} lidera em engajamento, representando oportunidade para expandir investimentos.")
-    
-    # Adicionar insights ao relatório
-    for i, insight in enumerate(insights[:5], 1):
-        report += f"{i}. {insight}\n"
-    
-    report += """
-
----
-
-## 🚀 RECOMENDAÇÕES
-
-1. **Otimizar mix de mídia:** Ajustar alocação entre plataformas baseado no ROI histórico
-2. **Escalar campanhas performáticas:** Identificar e aumentar budget das campanhas com melhor CTR e conversões
-3. **Testar novos formatos:** Experimentar diferentes formatos criativos nas plataformas de melhor performance
-4. **Refinar segmentação:** Ajustar públicos-alvo baseado no engajamento por categoria de produto
-5. **Monitorar CPC:** Implementar alertas para variações significativas no custo por clique
-
----
-
-## 📅 PRÓXIMOS PASSOS
-
-- [ ] Revisar orçamento mensal por plataforma
-- [ ] Analisar sazonalidade por categoria de produto
-- [ ] Planejar testes A/B para campanhas de baixa performance
-- [ ] Agendar reunião de review com equipe de performance
-- [ ] Definir metas para o próximo período
-
----
-
-*Relatório gerado automaticamente em {datetime.now().strftime("%d/%m/%Y %H:%M")}*
-"""
-    
-    return report
-
-# =============================================================================
-# FUNÇÕES PARA ANÁLISE DE CENÁRIO YoY
-# =============================================================================
-
-def calculate_yoy(current_value, previous_value):
-    """Calcula variação YoY"""
-    if previous_value == 0:
-        return 0
-    return ((current_value - previous_value) / previous_value) * 100
-
-def analyze_scenario_data(investimento_atual, investimento_anterior,
-                         sessoes_atual, sessoes_anterior,
-                         engajamento_atual, engajamento_anterior,
-                         views_atual, views_anterior):
-    """Analisa dados de cenário e calcula YoY"""
-    
-    # Calcular YoY para cada métrica
-    investimento_yoy = calculate_yoy(investimento_atual, investimento_anterior)
-    sessoes_yoy = calculate_yoy(sessoes_atual, sessoes_anterior)
-    engajamento_yoy = calculate_yoy(engajamento_atual, engajamento_anterior)
-    views_yoy = calculate_yoy(views_atual, views_anterior)
-    
-    # Calcular eficiência
-    eficiencia_atual = engajamento_atual / investimento_atual if investimento_atual > 0 else 0
-    eficiencia_anterior = engajamento_anterior / investimento_anterior if investimento_anterior > 0 else 0
-    eficiencia_yoy = calculate_yoy(eficiencia_atual, eficiencia_anterior)
-    
-    # Calcular custo por sessão
-    cps_atual = investimento_atual / sessoes_atual if sessoes_atual > 0 else 0
-    cps_anterior = investimento_anterior / sessoes_anterior if sessoes_anterior > 0 else 0
-    cps_yoy = calculate_yoy(cps_atual, cps_anterior)
-    
-    # Calcular engajamento por view
-    eng_view_atual = engajamento_atual / views_atual if views_atual > 0 else 0
-    eng_view_anterior = engajamento_anterior / views_anterior if views_anterior > 0 else 0
-    eng_view_yoy = calculate_yoy(eng_view_atual, eng_view_anterior)
-    
-    # Preparar dados para análise
-    data_dict = {
-        'investimento_atual': investimento_atual,
-        'investimento_anterior': investimento_anterior,
-        'investimento_yoy': investimento_yoy,
-        
-        'sessoes_atual': sessoes_atual,
-        'sessoes_anterior': sessoes_anterior,
-        'sessoes_yoy': sessoes_yoy,
-        
-        'engajamento_atual': engajamento_atual,
-        'engajamento_anterior': engajamento_anterior,
-        'engajamento_yoy': engajamento_yoy,
-        
-        'views_atual': views_atual,
-        'views_anterior': views_anterior,
-        'views_yoy': views_yoy,
-        
-        'eficiencia_atual': eficiencia_atual,
-        'eficiencia_anterior': eficiencia_anterior,
-        'eficiencia_yoy': eficiencia_yoy,
-        
-        'cps_atual': cps_atual,
-        'cps_anterior': cps_anterior,
-        'cps_yoy': cps_yoy,
-        
-        'eng_view_atual': eng_view_atual,
-        'eng_view_anterior': eng_view_anterior,
-        'eng_view_yoy': eng_view_yoy
+def carregar_dicionario_categorias():
+    """Carrega dicionário de categorias para sugestões"""
+    return {
+        'iniciativa': [
+            'LANCAMENTO', 'RELANCAMENTO', 'PROMOCAO', 'SAZONAL',
+            'EVENTO', 'FEIRA', 'CONGRESSO', 'WORKSHOP',
+            'DIA_ESPECIAL', 'NATAL', 'PASCOA', 'BLACKFRIDAY',
+            'CYBERMONDAY', 'VERAO', 'INVERNO', 'OUTONO', 'PRIMAVERA'
+        ],
+        'produto': [
+            'PRODUTO_A', 'PRODUTO_B', 'PRODUTO_C', 'PRODUTO_D',
+            'LINHA_X', 'LINHA_Y', 'LINHA_Z', 'FAMILIA_A', 'FAMILIA_B'
+        ],
+        'cultura': [
+            'SOJA', 'MILHO', 'CAFE', 'ALGODAO', 'CANA',
+            'TRIGO', 'ARROZ', 'FEIJAO', 'FRUTAS', 'HORTALICAS',
+            'GRÃOS', 'CEREAIS', 'OLEAGINOSAS'
+        ],
+        'categoria': [
+            'INSETICIDA', 'FUNGICIDA', 'HERBICIDA', 'ADUBO',
+            'FERTILIZANTE', 'SEMENTE', 'BIOLOGICO', 'QUIMICO',
+            'ORGANICO', 'CONVENCIONAL'
+        ],
+        'tipo_campanha': [
+            'VIDEO', 'DISPLAY', 'SEARCH', 'SOCIAL', 'EMAIL',
+            'PERFORMANCE', 'BRANDING', 'DIRECT_RESPONSE',
+            'NATIVE', 'PROGRAMMATIC', 'AUDIO', 'TV', 'RADIO'
+        ],
+        'objetivo': [
+            'AWARENESS', 'CONSIDERATION', 'CONVERSION',
+            'LEAD_GENERATION', 'SALES', 'TRAFFIC', 'ENGAGEMENT',
+            'BRAND_LIFT', 'INSTALLS', 'VIEWS'
+        ],
+        'etapa_funil': ['TOF', 'MOF', 'BOF', 'UP', 'MID', 'LOWER'],
+        'plataforma': [
+            'GOOGLE_ADS', 'FACEBOOK', 'INSTAGRAM', 'TIKTOK',
+            'LINKEDIN', 'YOUTUBE', 'TWITTER', 'PINTEREST',
+            'DV360', 'TRADEDESK', 'AMAZON_DSP'
+        ]
     }
-    
-    return data_dict
 
 # =============================================================================
 # INTERFACE PRINCIPAL
 # =============================================================================
 
 # Inicializar estado
-if 'df_data' not in st.session_state:
-    st.session_state.df_data = pd.DataFrame()
-if 'selected_client' not in st.session_state:
-    st.session_state.selected_client = "Syngenta"
-if 'current_month' not in st.session_state:
-    st.session_state.current_month = datetime.now().strftime('%Y-%m')
-if 'previous_month' not in st.session_state:
-    prev_month = (datetime.now() - relativedelta(months=1)).strftime('%Y-%m')
-    st.session_state.previous_month = prev_month
-if 'month_comparison' not in st.session_state:
-    st.session_state.month_comparison = None
-if 'detailed_report' not in st.session_state:
-    st.session_state.detailed_report = None
-if 'yoy_analysis_result' not in st.session_state:
-    st.session_state.yoy_analysis_result = None
-if 'text_analysis_result' not in st.session_state:
-    st.session_state.text_analysis_result = None
+if 'df_completo' not in st.session_state:
+    st.session_state.df_completo = pd.DataFrame()
+if 'colunas_numericas' not in st.session_state:
+    st.session_state.colunas_numericas = []
+if 'gemini_analysis' not in st.session_state:
+    st.session_state.gemini_analysis = None
+if 'df_classificado' not in st.session_state:
+    st.session_state.df_classificado = pd.DataFrame()
+if 'relatorio_classificacao' not in st.session_state:
+    st.session_state.relatorio_classificacao = None
+if 'filtros_aplicados' not in st.session_state:
+    st.session_state.filtros_aplicados = {}
+if 'slides_description' not in st.session_state:
+    st.session_state.slides_description = None
 
 # Sidebar
 with st.sidebar:
     st.header("⚙️ Configurações")
     
-    # Testar conexão
-    if st.button("Testar Conexão BigQuery", use_container_width=True):
+    if st.button("Testar Conexão BigQuery"):
         with st.spinner("Conectando..."):
             client = get_bigquery_client()
             if client:
                 st.success("✅ Conexão OK!")
-    
-    st.markdown("---")
-    st.subheader("👥 Seleção do Cliente")
-    
+
+    st.subheader("👥 Filtro por Cliente")
     opcoes_clientes = [
+        "Todos", 
         "Syngenta", 
         "Golden Harvest Brasil", 
         "Nidera (oficial)", 
         "NK Seeds (Oficial - Lab)", 
         "EuroChem Fertilizantes Tocantins", 
-        "Grupo Vittia",
-        "Todos"
+        "Grupo Vittia"
     ]
     
-    selected_client = st.selectbox(
-        "Cliente:",
+    filtro_cliente = st.selectbox(
+        "Selecione o Cliente:",
         options=opcoes_clientes,
-        index=0,
-        key="client_select_sidebar"
+        index=0
     )
     
-    st.markdown("---")
-    st.subheader("📅 Período de Análise")
-    
-    # Seleção de meses
-    current_date = datetime.now()
-    
-    months_options = []
-    for i in range(12):
-        month_date = current_date - relativedelta(months=i)
-        month_str = month_date.strftime('%Y-%m')
-        month_display = month_date.strftime('%B %Y').title()
-        months_options.append((month_str, month_display))
-    
-    current_month = st.selectbox(
-        "Mês Atual:",
-        options=[m[0] for m in months_options],
-        format_func=lambda x: dict(months_options)[x],
-        index=0,
-        key="current_month_select"
-    )
-    
-    previous_month = st.selectbox(
-        "Mês Anterior:",
-        options=[m[0] for m in months_options[1:]],
-        format_func=lambda x: dict(months_options)[x],
-        index=0,
-        key="previous_month_select"
-    )
-    
-    st.markdown("---")
-    st.subheader("📱 Data Sources")
-    
-    data_sources_opcoes = ["facebook", "google ads", "tiktok", "linkedin", "twitter", "pinterest", "display", "search", "youtube", "pmax"]
+    st.subheader("📱 Data Sources")    
+    data_sources_opcoes = ["facebook", "google ads", "tiktok", "linkedin", "twitter", "pinterest"]
     selected_sources = st.multiselect(
-        "Filtrar por plataforma:",
+        "Data Sources",
         options=data_sources_opcoes,
-        default=data_sources_opcoes[:5],
-        key="data_sources_select"
+        default=data_sources_opcoes[:3]
     )
     
-    st.markdown("---")
+    st.subheader("📅 Período")
+    periodo = st.radio(
+        "Selecione",
+        ["Últimos 30 dias", "Últimos 90 dias", "Últimos 180 dias", "Todo período", "Personalizado"],
+        index=1
+    )
     
-    # Botão para carregar dados
-    if st.button("📊 Carregar Dados", type="primary", use_container_width=True):
-        with st.spinner(f"Carregando dados para {selected_client}..."):
+    data_fim = datetime.now().date()
+    
+    if periodo == "Últimos 30 dias":
+        data_inicio = data_fim - timedelta(days=30)
+    elif periodo == "Últimos 90 dias":
+        data_inicio = data_fim - timedelta(days=90)
+    elif periodo == "Últimos 180 dias":
+        data_inicio = data_fim - timedelta(days=180)
+    elif periodo == "Todo período":
+        data_inicio = None
+        data_fim = None
+    else:
+        col1, col2 = st.columns(2)
+        with col1:
+            data_inicio = st.date_input("Início", value=data_fim - timedelta(days=90))
+        with col2:
+            data_fim = st.date_input("Fim", value=data_fim)
+    
+    limite_default = 20000
+    if st.session_state.df_completo.empty:
+        max_limit = 100000
+    else:
+        max_limit = min(100000, max(limite_default, len(st.session_state.df_completo)))
+    
+    limite = st.slider(
+        "Limite de registros", 
+        1000, 
+        max_limit, 
+        min(limite_default, max_limit), 
+        1000
+    )
+    
+    if st.button("📊 Carregar Dados", use_container_width=True, type="primary"):
+        with st.spinner("Carregando..."):
             client = get_bigquery_client()
             if client:
-                # Calcular datas baseadas nos meses selecionados
-                current_year, current_month_num = map(int, current_month.split('-'))
-                prev_year, prev_month_num = map(int, previous_month.split('-'))
-                
-                # Primeiro dia do mês atual
-                start_date_current = date(current_year, current_month_num, 1)
-                
-                # Último dia do mês atual
-                if current_month_num == 12:
-                    end_date_current = date(current_year + 1, 1, 1) - timedelta(days=1)
-                else:
-                    end_date_current = date(current_year, current_month_num + 1, 1) - timedelta(days=1)
-                
-                # Primeiro dia do mês anterior
-                start_date_prev = date(prev_year, prev_month_num, 1)
-                
-                # Último dia do mês anterior
-                if prev_month_num == 12:
-                    end_date_prev = date(prev_year + 1, 1, 1) - timedelta(days=1)
-                else:
-                    end_date_prev = date(prev_year, prev_month_num + 1, 1) - timedelta(days=1)
-                
-                # Carregar dados para os dois períodos
-                start_date = min(start_date_current, start_date_prev)
-                end_date = max(end_date_current, end_date_prev)
-                
-                df = load_client_data(
+                df = load_all_columns_data(
                     client,
-                    selected_client,
-                    start_date=start_date,
-                    end_date=end_date,
-                    data_sources=selected_sources
+                    data_inicio=data_inicio,
+                    data_fim=data_fim,
+                    data_sources=selected_sources,
+                    filtro_cliente=filtro_cliente,
+                    limit=limite
                 )
                 
                 if not df.empty:
-                    st.session_state.df_data = df
-                    st.session_state.selected_client = selected_client
-                    st.session_state.current_month = current_month
-                    st.session_state.previous_month = previous_month
+                    st.session_state.df_completo = df
+                    st.session_state.colunas_numericas = identificar_colunas_numericas(df)
                     
-                    # Calcular comparação
-                    comparison = calculate_monthly_comparison(df, current_month, previous_month)
-                    st.session_state.month_comparison = comparison
+                    df_classificado = classificar_campanhas_multi_cliente(df)
+                    st.session_state.df_classificado = df_classificado
                     
-                    # Gerar relatório detalhado
-                    report = generate_detailed_report(df, current_month, previous_month, selected_client)
-                    st.session_state.detailed_report = report
-                    
-                    st.success(f"✅ {len(df):,} registros carregados!")
+                    st.success(f"✅ {len(df):,} registros carregados e classificados")
+                    st.session_state.gemini_analysis = None
+                    st.session_state.filtros_aplicados = {}
                     st.rerun()
                 else:
                     st.error("Nenhum dado encontrado")
@@ -1238,515 +1185,1271 @@ with st.sidebar:
                 st.error("❌ Não foi possível conectar.")
 
 # Verificar dados
-df = st.session_state.df_data
-comparison = st.session_state.month_comparison
-detailed_report = st.session_state.detailed_report
+df = st.session_state.df_completo
+colunas_numericas = st.session_state.colunas_numericas
+df_classificado = st.session_state.df_classificado
+
+if df.empty:
+    st.warning("📭 Nenhum dado carregado. Use o botão na sidebar para carregar dados.")
+    st.stop()
 
 # =============================================================================
-# LAYOUT PRINCIPAL - ABAS
+# SEÇÃO DE FILTROS MULTI-CLIENTE
 # =============================================================================
 
+st.markdown("## 🔍 Filtros Avançados por Categoria de Campanha")
+
+filtro_col1, filtro_col2, filtro_col3, filtro_col4 = st.columns(4)
+
+with filtro_col1:
+    if 'campaign_produto' in df_classificado.columns:
+        todos_produtos = [
+            'Todos', 
+            'ACTARA',
+            'ALADE-MITRION',
+            'AMISTAR',
+            'AMISTAR_TOP',
+            'AMPLIGO',
+            'ARVATICO',
+            'AVICTA_COMPLETO',
+            'AXIAL',
+            'BRAVONIL',
+            'BRAVONIL_TOP',
+            'BRAVONIL720',
+            'CALARIS',
+            'CALARIS_MA',
+            'CALIPEN_SC',
+            'CLARIVA_SKY',
+            'CRUISER_ADVANCED',
+            'CRUISER_OPTI',
+            'CRUISER_TURBO',
+            'CURYOM',
+            'CYPRESS',
+            'DUAL_GOLD',
+            'DURIVO',
+            'EDDUS',
+            'ELATUS',
+            'ELESTAL_NEO',
+            'ENGEO_PLENO_S',
+            'FORTENZA',
+            'FORTENZA_DUO',
+            'FORTENZA_ELITE',
+            'FORTENZA_VIP_TURBO',
+            'GROVER',
+            'INFLUX',
+            'INSTIVO',
+            'INVICT',
+            'JOINER',
+            'MAXIM_QUATTRO',
+            'MINECTO_PRO',
+            'MIRAVIS',
+            'MIRAVIS_DUO',
+            'MIRAVIS_PRO',
+            'MODDUS',
+            'NEMATOIDES',
+            'PERGADO_MZ',
+            'PLINAZOLIN',
+            'POLYTRIN',
+            'PRIORI_TOP',
+            'PRIORI_XTRA',
+            'PROCLAIM',
+            'REBRON',
+            'REGLONE',
+            'REVUS_OPTI',
+            'RIDOMIL_GOLD',
+            'SCORE_FLEXI',
+            'SPONTA',
+            'VERDADERO',
+            'VERDAVIS',
+            'VOLIAM_FLEXI',
+            'VOLIAM_TARGO',
+            'CERTANO',
+            'RIZOLIQ_LLI',
+            'RIZOLIQ_UHC',
+            'ALADE',
+            'MITRION',
+            'POLO_500_SC',
+            'ADEPIDYN',
+            'ORONDIS_FLEXI',
+            'SCORE',
+            'ORONDIS_ULTRA',
+            'INZAK_ZEON',
+            'REVERB',
+            'MEGAFOL',
+            'AEVO',
+            'YIELDON',
+            'FRONDEO',
+            'FLEXSTAR_GT',
+            'ELESTAL',
+            'FANTON',
+            'JOINER_PRO',
+            'INVENCIS',
+            'SEEKER',
+            'CRESTIVO',
+            'VIVA',
+            'RIZODERMA',
+            'RIZOFOS',
+            'SIGNUM',
+            'NETURE',
+            'MIRAVIS_XTRA',
+            'VANIVA',
+            'CRUISER_OPTI-CRUISER_ADVANCED',
+            'VICTRATO_GOLD',
+            'BOUNDARY_EC',
+            'VICTRATO'
+        ]
+        
+        produto_selecionado = st.selectbox(
+            "📦 Produto:",
+            options=todos_produtos,
+            key="produto_selectbox"
+        )
+        
+        if produto_selecionado != 'Todos':
+            st.session_state.filtros_aplicados['campaign_produto'] = produto_selecionado
+        elif 'campaign_produto' in st.session_state.filtros_aplicados:
+            del st.session_state.filtros_aplicados['campaign_produto']
+    
+    if 'campaign_cultura' in df_classificado.columns:
+        culturas = sorted(df_classificado['campaign_cultura'].dropna().unique())
+        cultura_selecionada = st.selectbox(
+            "🌱 Cultura/Setor:",
+            options=['Todas'] + list(culturas)
+        )
+        if cultura_selecionada != 'Todas':
+            st.session_state.filtros_aplicados['campaign_cultura'] = cultura_selecionada
+        elif 'campaign_cultura' in st.session_state.filtros_aplicados:
+            del st.session_state.filtros_aplicados['campaign_cultura']
+
+with filtro_col2:
+    if 'campaign_tipo_campanha' in df_classificado.columns:
+        tipos = sorted(df_classificado['campaign_tipo_campanha'].dropna().unique())
+        tipo_selecionado = st.selectbox(
+            "🎯 Tipo de Campanha:",
+            options=['Todos'] + list(tipos)
+        )
+        if tipo_selecionado != 'Todos':
+            st.session_state.filtros_aplicados['campaign_tipo_campanha'] = tipo_selecionado
+        elif 'campaign_tipo_campanha' in st.session_state.filtros_aplicados:
+            del st.session_state.filtros_aplicados['campaign_tipo_campanha']
+    
+    if 'campaign_objetivo' in df_classificado.columns:
+        objetivos = sorted(df_classificado['campaign_objetivo'].dropna().unique())
+        objetivo_selecionado = st.selectbox(
+            "🎯 Objetivo:",
+            options=['Todos'] + list(objetivos)
+        )
+        if objetivo_selecionado != 'Todos':
+            st.session_state.filtros_aplicados['campaign_objetivo'] = objetivo_selecionado
+        elif 'campaign_objetivo' in st.session_state.filtros_aplicados:
+            del st.session_state.filtros_aplicados['campaign_objetivo']
+
+with filtro_col3:
+    if 'campaign_etapa_funil' in df_classificado.columns:
+        etapas = sorted(df_classificado['campaign_etapa_funil'].dropna().unique())
+        etapa_selecionada = st.selectbox(
+            "📊 Etapa do Funil:",
+            options=['Todas'] + list(etapas)
+        )
+        if etapa_selecionada != 'Todas':
+            st.session_state.filtros_aplicados['campaign_etapa_funil'] = etapa_selecionada
+        elif 'campaign_etapa_funil' in st.session_state.filtros_aplicados:
+            del st.session_state.filtros_aplicados['campaign_etapa_funil']
+    
+    if 'campaign_iniciativa' in df_classificado.columns:
+        iniciativas = sorted(df_classificado['campaign_iniciativa'].dropna().unique())
+        iniciativa_selecionada = st.selectbox(
+            "🚀 Iniciativa:",
+            options=['Todas'] + list(iniciativas)
+        )
+        if iniciativa_selecionada != 'Todas':
+            st.session_state.filtros_aplicados['campaign_iniciativa'] = iniciativa_selecionada
+        elif 'campaign_iniciativa' in st.session_state.filtros_aplicados:
+            del st.session_state.filtros_aplicados['campaign_iniciativa']
+
+with filtro_col4:
+    if 'campaign_plataforma' in df_classificado.columns:
+        plataformas = sorted(df_classificado['campaign_plataforma'].dropna().unique())
+        plataforma_selecionada = st.selectbox(
+            "🖥️ Plataforma:",
+            options=['Todas'] + list(plataformas)
+        )
+        if plataforma_selecionada != 'Todas':
+            st.session_state.filtros_aplicados['campaign_plataforma'] = plataforma_selecionada
+        elif 'campaign_plataforma' in st.session_state.filtros_aplicados:
+            del st.session_state.filtros_aplicados['campaign_plataforma']
+
+    if 'campaign_agencia' in df_classificado.columns:
+        agencias = sorted(df_classificado['campaign_agencia'].dropna().unique())
+        agencia_selecionada = st.selectbox(
+            "🏢 Agência:",
+            options=['Todas'] + list(agencias)
+        )
+        if agencia_selecionada != 'Todas':
+            st.session_state.filtros_aplicados['campaign_agencia'] = agencia_selecionada
+        elif 'campaign_agencia' in st.session_state.filtros_aplicados:
+            del st.session_state.filtros_aplicados['campaign_agencia']
+
+col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 2])
+
+with col_btn1:
+    if st.button("✅ Aplicar Filtros", use_container_width=True):
+        st.rerun()
+
+with col_btn2:
+    if st.button("🔄 Limpar Filtros", use_container_width=True):
+        st.session_state.filtros_aplicados = {}
+        st.rerun()
+
+with col_btn3:
+    busca_campanha = st.text_input(
+        "",
+        placeholder="Digite parte do nome da campanha...",
+        key="busca_campanha_input",
+        label_visibility="collapsed"
+    )
+    
+    if busca_campanha:
+        st.session_state.busca_campanha = busca_campanha
+    elif 'busca_campanha' not in st.session_state:
+        st.session_state.busca_campanha = ""
+
+df_filtrado = df_classificado.copy()
+if st.session_state.filtros_aplicados:
+    for coluna, valor in st.session_state.filtros_aplicados.items():
+        if coluna in df_filtrado.columns:
+            df_filtrado = df_filtrado[df_filtrado[coluna] == valor]
+
+if 'busca_campanha' in st.session_state and st.session_state.busca_campanha:
+    busca_termo = st.session_state.busca_campanha.lower().strip()
+    if busca_termo and 'campaign' in df_filtrado.columns:
+        df_filtrado = df_filtrado[
+            df_filtrado['campaign'].astype(str).str.lower().str.contains(busca_termo, na=False)
+        ]
+
+filtros_ativos = []
+
+if st.session_state.filtros_aplicados:
+    filtros_ativos.extend([f"{k.replace('campaign_', '')}: {v}" for k, v in st.session_state.filtros_aplicados.items()])
+
+if 'busca_campanha' in st.session_state and st.session_state.busca_campanha:
+    filtros_ativos.append(f"Busca: '{st.session_state.busca_campanha}'")
+
+if filtros_ativos:
+    st.markdown(f"### 📊 Dados Filtrados: {len(df_filtrado):,} registros")
+    filtros_texto = " | ".join(filtros_ativos)
+    st.info(f"**Filtros ativos:** {filtros_texto}")
+    
+    st.markdown("**Filtros aplicados:**")
+    col_badges = st.columns(min(8, len(filtros_ativos)))
+    for idx, filtro in enumerate(filtros_ativos):
+        with col_badges[idx % 8]:
+            st.markdown(f'<span style="background:#e0f2fe; padding:5px 10px; border-radius:10px; margin:2px; font-size:0.8em">{filtro}</span>', unsafe_allow_html=True)
+else:
+    st.markdown(f"### 📊 Dados Completos: {len(df_filtrado):,} registros")
+    st.info("ℹ️ Nenhum filtro aplicado. Todos os dados estão visíveis.")
+
+# Abas principais
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-    "📈 Dashboard MoM", 
-    "💰 Investimento por Plataforma", 
-    "🎯 Performance por Produto",
-    "📊 Relatório Executivo",
-    "📋 Dados Detalhados",
-    "📊 Cenário YoY",
-    "📝 Análise de Texto"
+    "📋 Visão Geral", 
+    "📈 Análise Numérica", 
+    "🔍 Explorar Colunas", 
+    "📊 Visualizar Dados",
+    "🎯 Performance",
+    "🤖 Análise com IA",
+    "🎪 Classificador Campanhas"
 ])
 
 # =============================================================================
-# TAB 1-5: ABAS EXISTENTES (MANTIDAS IGUAIS)
+# TAB 1: VISÃO GERAL
 # =============================================================================
 
-# Tab 1: Dashboard MoM
 with tab1:
-    if df.empty:
-        st.warning("📭 Nenhum dado carregado. Use o botão na sidebar para carregar dados.")
-        st.info("💡 Selecione um cliente e período, depois clique em 'Carregar Dados'")
-    else:
-        st.header(f"📈 Dashboard Comparativo MoM - {st.session_state.selected_client}")
+    st.header("📋 Visão Geral das Colunas")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        safe_metric("Total de Colunas", len(df_filtrado.columns))
+    
+    with col2:
+        col_numericas_filtradas = identificar_colunas_numericas(df_filtrado)
+        safe_metric("Colunas Numéricas", len(col_numericas_filtradas))
+    
+    with col3:
+        safe_metric("Total de Registros", len(df_filtrado))
+    
+    with col4:
+        try:
+            memoria_mb = df_filtrado.memory_usage(deep=True).sum() / 1024**2
+            safe_metric("Uso de Memória", f"{memoria_mb:.2f} MB")
+        except:
+            safe_metric("Uso de Memória", "N/A")
+    
+    st.subheader("📊 Detalhes de Cada Coluna")
+    
+    col_filtro1, col_filtro2 = st.columns(2)
+    
+    with col_filtro1:
+        tipo_filtro = st.selectbox(
+            "Filtrar por tipo",
+            ["Todas", "Numéricas", "Texto", "Datas"],
+            key="filtro_tipo_tab1"
+        )
+    
+    with col_filtro2:
+        pesquisa_coluna = st.text_input("🔍 Pesquisar coluna", "", key="pesquisa_coluna_tab1")
+    
+    colunas_para_mostrar = []
+    
+    for col in df_filtrado.columns:
+        incluir = True
         
-        st.markdown(f"""
-        <div class="month-comparison">
-            <h3>🔄 Comparativo: {st.session_state.current_month} vs {st.session_state.previous_month}</h3>
-        </div>
-        """, unsafe_allow_html=True)
+        if tipo_filtro == "Numéricas":
+            incluir = col in col_numericas_filtradas
+        elif tipo_filtro == "Texto":
+            incluir = df_filtrado[col].dtype == 'object' and col not in col_numericas_filtradas
+        elif tipo_filtro == "Datas":
+            incluir = pd.api.types.is_datetime64_any_dtype(df_filtrado[col])
         
-        if comparison:
-            # Métricas principais (código mantido igual)
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                if 'spend' in comparison:
-                    spend_data = comparison['spend']
-                    delta = f"{spend_data['change_pct']:+.1f}%"
-                    st.metric(
-                        label="💰 Investimento Total",
-                        value=format_currency(spend_data['current']),
-                        delta=delta,
-                        delta_color="normal"
-                    )
-            
-            with col2:
-                if 'impressions' in comparison:
-                    imp_data = comparison['impressions']
-                    delta = f"{imp_data['change_pct']:+.1f}%"
-                    st.metric(
-                        label="👁️ Impressões",
-                        value=f"{imp_data['current']:,.0f}".replace(",", "."),
-                        delta=delta,
-                        delta_color="normal"
-                    )
-            
-            with col3:
-                if 'clicks' in comparison:
-                    clicks_data = comparison['clicks']
-                    delta = f"{clicks_data['change_pct']:+.1f}%"
-                    st.metric(
-                        label="🖱️ Cliques",
-                        value=f"{clicks_data['current']:,.0f}".replace(",", "."),
-                        delta=delta,
-                        delta_color="normal"
-                    )
-            
-            with col4:
-                if 'conversions' in comparison:
-                    conv_data = comparison['conversions']
-                    delta = f"{conv_data['change_pct']:+.1f}%"
-                    st.metric(
-                        label="🎯 Conversões",
-                        value=f"{conv_data['current']:,.0f}".replace(",", "."),
-                        delta=delta,
-                        delta_color="normal"
-                    )
-            
-            # Resto do código da Tab 1 (mantido igual)...
-
-# Tabs 2-5 (mantidas iguais, apenas verificando se há dados)
-# ... [código das tabs 2-5 mantido igual]
+        if pesquisa_coluna and pesquisa_coluna.lower() not in col.lower():
+            incluir = False
+        
+        if incluir:
+            colunas_para_mostrar.append(col)
+    
+    for col in sorted(colunas_para_mostrar)[:50]:
+        analise = analisar_coluna(df_filtrado, col)
+        
+        if analise:
+            with st.expander(f"**{col}** ({analise['tipo_detalhado'] if 'tipo_detalhado' in analise else analise['tipo']})"):
+                col_info1, col_info2 = st.columns(2)
+                
+                with col_info1:
+                    safe_metric("Tipo", analise['tipo'])
+                    safe_metric("Não nulos", analise['nao_nulos'])
+                    safe_metric("Valores únicos", analise['valores_unicos'])
+                
+                with col_info2:
+                    safe_metric("Nulos", analise['nulos'])
+                    safe_metric("% Nulos", f"{analise['percentual_nulos']:.1f}%")
+                
+                if analise['tipo_detalhado'] == 'Numérica' and analise['nao_nulos'] > 0:
+                    st.subheader("📈 Estatísticas")
+                    col_stats1, col_stats2, col_stats3, col_stats4 = st.columns(4)
+                    
+                    with col_stats1:
+                        safe_metric("Média", analise.get('media', 0))
+                        safe_metric("Min", analise.get('min', 0))
+                    
+                    with col_stats2:
+                        safe_metric("Mediana", analise.get('mediana', 0))
+                        safe_metric("Max", analise.get('max', 0))
+                    
+                    with col_stats3:
+                        safe_metric("Q1 (25%)", analise.get('q1', 0))
+                    
+                    with col_stats4:
+                        safe_metric("Q3 (75%)", analise.get('q3', 0))
 
 # =============================================================================
-# TAB 6: CENÁRIO YoY
+# TAB 2: ANÁLISE NUMÉRICA
+# =============================================================================
+
+with tab2:
+    st.header("📈 Análise de Colunas Numéricas")
+    
+    col_numericas_filtradas = identificar_colunas_numericas(df_filtrado)
+    
+    if not col_numericas_filtradas:
+        st.warning("Nenhuma coluna numérica")
+    else:
+        st.success(f"✅ {len(col_numericas_filtradas)} colunas numéricas")
+        
+        colunas_selecionadas = st.multiselect(
+            "Selecione colunas para análise",
+            options=col_numericas_filtradas,
+            default=col_numericas_filtradas[:min(5, len(col_numericas_filtradas))],
+            key="colunas_selecionadas_tab2"
+        )
+        
+        if colunas_selecionadas:
+            st.subheader("📊 Estatísticas Descritivas")
+            
+            df_numeric = df_filtrado[colunas_selecionadas].apply(pd.to_numeric, errors='coerce')
+            
+            stats_df = df_numeric.describe().T
+            stats_df['missing'] = df_numeric.isna().sum()
+            stats_df['missing_pct'] = (df_numeric.isna().sum() / len(df_filtrado) * 100)
+            
+            def formatar_numero(x):
+                if isinstance(x, (int, np.integer)):
+                    return f"{x:,}"
+                elif isinstance(x, (float, np.floating)):
+                    if pd.isna(x):
+                        return "N/A"
+                    elif abs(x) < 0.01:
+                        return f"{x:.4f}"
+                    elif abs(x) < 1:
+                        return f"{x:.3f}"
+                    elif abs(x) < 1000:
+                        return f"{x:.2f}"
+                    else:
+                        return f"{x:,.0f}"
+                return str(x)
+            
+            try:
+                st.dataframe(
+                    stats_df.style.format(formatar_numero),
+                    use_container_width=True
+                )
+            except:
+                st.dataframe(stats_df, use_container_width=True)
+            
+            if len(colunas_selecionadas) > 0:
+                st.subheader("📈 Distribuições")
+                
+                num_cols = min(3, len(colunas_selecionadas))
+                cols_vis = st.columns(num_cols)
+                
+                for idx, col in enumerate(colunas_selecionadas[:num_cols*3]):
+                    with cols_vis[idx % num_cols]:
+                        fig = criar_visualizacao_coluna(df_filtrado, col)
+                        if fig is not None and fig:
+                            st.plotly_chart(
+                                fig, 
+                                use_container_width=True,
+                                key=f"histogram_{col}_{idx}"
+                            )
+
+            if len(colunas_selecionadas) >= 2:
+                st.subheader("🔥 Correlações")
+                
+                try:
+                    df_numeric_corr = df_numeric.copy()
+                    correlacao = df_numeric_corr.corr()
+                    
+                    fig_corr = px.imshow(
+                        correlacao,
+                        text_auto='.2f',
+                        aspect="auto",
+                        color_continuous_scale='RdBu_r',
+                        title="Correlações"
+                    )
+                    fig_corr.update_layout(height=600)
+                    st.plotly_chart(
+                        fig_corr, 
+                        use_container_width=True,
+                        key="correlation_matrix_tab2"
+                    )
+                    
+                    st.subheader("🔗 Principais Correlações")
+                    
+                    correlacoes_fortes = []
+                    for i in range(len(correlacao.columns)):
+                        for j in range(i+1, len(correlacao.columns)):
+                            corr = correlacao.iloc[i, j]
+                            if not pd.isna(corr) and abs(corr) > 0.3:
+                                correlacoes_fortes.append({
+                                    'Variável 1': correlacao.columns[i],
+                                    'Variável 2': correlacao.columns[j],
+                                    'Correlação': corr,
+                                    'Força': 'Forte' if abs(corr) > 0.7 else 'Moderada'
+                                })
+                    
+                    if correlacoes_fortes:
+                        correlacoes_fortes.sort(key=lambda x: abs(x['Correlação']), reverse=True)
+                        df_corr = pd.DataFrame(correlacoes_fortes[:20])
+                        st.dataframe(
+                            df_corr, 
+                            use_container_width=True,
+                            key="strong_correlations_table"
+                        )
+                    else:
+                        st.info("Sem correlações fortes (> 0.3)")
+                        
+                except Exception as e:
+                    st.error(f"Erro ao calcular correlações: {str(e)[:100]}")
+
+# =============================================================================
+# TAB 3: EXPLORAR COLUNAS
+# =============================================================================
+with tab3:
+    st.header("🔍 Explorar Colunas Individualmente")
+    
+    coluna_selecionada = st.selectbox(
+        "Selecione uma coluna para explorar",
+        options=sorted(df_filtrado.columns),
+        index=0,
+        key="coluna_selecionada_tab3"
+    )
+    
+    if coluna_selecionada:
+        analise = analisar_coluna(df_filtrado, coluna_selecionada)
+        
+        if analise is not None:
+            col_info1, col_info2 = st.columns(2)
+            
+            with col_info1:
+                safe_metric("Total de Valores", analise['total'])
+                safe_metric("Valores Não Nulos", analise['nao_nulos'])
+                safe_metric("Valores Únicos", analise['valores_unicos'])
+            
+            with col_info2:
+                safe_metric("Valores Nulos", analise['nulos'])
+                safe_metric("% Nulos", f"{analise['percentual_nulos']:.1f}%")
+            
+            st.subheader("📊 Visualização")
+            fig = criar_visualizacao_coluna(df_filtrado, coluna_selecionada)
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info(f"Não foi possível criar visualização para esta coluna")
+            
+            st.subheader("📋 Amostra de Valores")
+            
+            col_amostra1, col_amostra2 = st.columns(2)
+            
+            with col_amostra1:
+                st.write("**Primeiros 10:**")
+                try:
+                    primeiros = df_filtrado[coluna_selecionada].head(10).tolist()
+                    primeiros_str = [str(x) for x in primeiros]
+                    for val in primeiros_str:
+                        st.write(f"- {val}")
+                except:
+                    st.write("Erro ao mostrar valores")
+            
+            with col_amostra2:
+                st.write("**Últimos 10:**")
+                try:
+                    ultimos = df_filtrado[coluna_selecionada].tail(10).tolist()
+                    ultimos_str = [str(x) for x in ultimos]
+                    for val in ultimos_str:
+                        st.write(f"- {val}")
+                except:
+                    st.write("Erro ao mostrar valores")
+            
+            if analise['tipo_detalhado'] == 'Texto/Categórica' and analise['valores_unicos'] <= 100:
+                st.subheader("📊 Distribuição")
+                
+                try:
+                    contagem = df_filtrado[coluna_selecionada].value_counts()
+                    df_contagem = pd.DataFrame({
+                        'Valor': contagem.index.astype(str),
+                        'Contagem': contagem.values,
+                        'Percentual': (contagem.values / len(df_filtrado) * 100)
+                    })
+                    
+                    st.dataframe(
+                        df_contagem.style.format({'Contagem': '{:,}', 'Percentual': '{:.1f}%'}),
+                        use_container_width=True
+                    )
+                except:
+                    st.error("Erro ao calcular distribuição")
+
+# =============================================================================
+# TAB 4: VISUALIZAR DADOS
+# =============================================================================
+
+with tab4:
+    st.header("📊 Visualizar Dados Completos")
+    
+    colunas_vis = st.multiselect(
+        "Selecione colunas para visualizar",
+        options=sorted(df_filtrado.columns),
+        default=sorted(df_filtrado.columns)[:min(10, len(df_filtrado.columns))],
+        key="colunas_vis_tab4"
+    )
+    
+    if colunas_vis:
+        st.subheader("🔍 Filtros Adicionais")
+        
+        col_f1, col_f2, col_f3 = st.columns(3)
+        
+        df_filtrado_tab4 = df_filtrado.copy()
+        
+        with col_f1:
+            if 'datasource' in df_filtrado.columns:
+                datasources = sorted(df_filtrado['datasource'].dropna().unique())
+                ds_selecionados = st.multiselect(
+                    "Data Sources",
+                    options=datasources,
+                    default=datasources[:min(3, len(datasources))],
+                    key="ds_selecionados_tab4"
+                )
+                if ds_selecionados:
+                    df_filtrado_tab4 = df_filtrado_tab4[df_filtrado_tab4['datasource'].isin(ds_selecionados)]
+        
+        with col_f2:
+            colunas_num_vis = [c for c in colunas_vis if c in identificar_colunas_numericas(df_filtrado)]
+            if colunas_num_vis:
+                col_filtro = st.selectbox(
+                    "Filtrar por coluna numérica",
+                    options=['Nenhum'] + colunas_num_vis,
+                    key="col_filtro_tab4"
+                )
+                if col_filtro != 'Nenhum':
+                    try:
+                        col_data = pd.to_numeric(df_filtrado_tab4[col_filtro], errors='coerce').dropna()
+                        if len(col_data) > 0:
+                            min_val = st.number_input(
+                                f"Valor mínimo de {col_filtro}",
+                                value=float(col_data.min()),
+                                key=f"min_val_{col_filtro}_tab4"
+                            )
+                            df_filtrado_tab4 = df_filtrado_tab4[pd.to_numeric(df_filtrado_tab4[col_filtro], errors='coerce') >= min_val]
+                    except:
+                        st.warning(f"Não foi possível filtrar por {col_filtro}")
+        
+        with col_f3:
+            limite_linhas = st.slider("Linhas para mostrar", 10, 1000, 100, key="limite_linhas_tab4")
+        
+        st.subheader(f"📋 Dados ({len(df_filtrado_tab4):,} registros)")
+        
+        if len(df_filtrado_tab4) > 0:
+            total_pages = max(1, len(df_filtrado_tab4) // limite_linhas + 1)
+            
+            col_pg1, col_pg2, col_pg3 = st.columns([1, 2, 1])
+            
+            with col_pg1:
+                if total_pages > 0:
+                    page_number = st.number_input(
+                        "Página", 
+                        min_value=1, 
+                        max_value=total_pages, 
+                        value=1, 
+                        key="page_number_tab4"
+                    )
+                else:
+                    page_number = 1
+                    st.write("Página: 1")
+            
+            with col_pg3:
+                st.caption(f"Total: {len(df_filtrado_tab4):,} registros")
+            
+            start_idx = (page_number - 1) * limite_linhas
+            end_idx = min(start_idx + limite_linhas, len(df_filtrado_tab4))
+            
+            df_display = df_filtrado_tab4[colunas_vis].iloc[start_idx:end_idx].copy()
+            
+            for col in colunas_vis:
+                if col in identificar_colunas_numericas(df_filtrado):
+                    try:
+                        df_display[col] = df_display[col].apply(
+                            lambda x: f"{x:,.2f}" if isinstance(x, (int, float)) and not pd.isna(x) else ""
+                        )
+                    except:
+                        pass
+                elif pd.api.types.is_datetime64_any_dtype(df_filtrado[col]):
+                    try:
+                        df_display[col] = df_display[col].dt.strftime('%Y-%m-%d')
+                    except:
+                        pass
+            
+            st.dataframe(
+                df_display,
+                use_container_width=True,
+                height=400
+            )
+        else:
+            st.info("Nenhum dado após filtros")
+        
+        st.subheader("📥 Exportar")
+        
+        if len(df_filtrado_tab4) > 0:
+            csv = df_filtrado_tab4[colunas_vis].to_csv(index=False)
+            st.download_button(
+                label="📥 Baixar CSV",
+                data=csv,
+                file_name=f"dados_filtrados_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                mime="text/csv",
+                key="download_csv_tab4"
+            )
+        else:
+            st.warning("Nenhum dado para exportar")
+
+# =============================================================================
+# TAB 5: PERFORMANCE
+# =============================================================================
+
+with tab5:
+    st.header("🎯 Análise de Performance")
+    
+    if 'campaign' not in df_filtrado.columns:
+        st.error("❌ Coluna 'campaign' não encontrada.")
+    else:
+        st.subheader("📊 Métricas Gerais")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            try:
+                num_campaigns = df_filtrado['campaign'].nunique()
+                safe_metric("Campanhas", num_campaigns)
+            except:
+                safe_metric("Campanhas", "Erro")
+        
+        with col2:
+            if 'date' in df_filtrado.columns:
+                try:
+                    df_date = df_filtrado['date'].dropna()
+                    if len(df_date) > 0:
+                        if not pd.api.types.is_datetime64_any_dtype(df_date):
+                            df_date = pd.to_datetime(df_date, errors='coerce')
+                        days = (df_date.max() - df_date.min()).days + 1
+                        safe_metric("Dias", days)
+                    else:
+                        safe_metric("Dias", 0)
+                except:
+                    safe_metric("Dias", "Erro")
+        
+        with col3:
+            if 'datasource' in df_filtrado.columns:
+                try:
+                    sources = df_filtrado['datasource'].nunique()
+                    safe_metric("Data Sources", sources)
+                except:
+                    safe_metric("Data Sources", "Erro")
+        
+        with col4:
+            try:
+                num_campaigns_val = df_filtrado['campaign'].nunique()
+                records_per_campaign = len(df_filtrado) / num_campaigns_val if num_campaigns_val > 0 else 0
+                safe_metric("Média Reg/Camp", f"{records_per_campaign:.1f}")
+            except:
+                safe_metric("Média Reg/Camp", "Erro")
+        
+        st.subheader("📈 Top Campanhas")
+        
+        if 'campaign' in df_filtrado.columns:
+            try:
+                campaign_stats = df_filtrado['campaign'].value_counts().head(10)
+                
+                fig = px.bar(
+                    x=campaign_stats.index.astype(str),
+                    y=campaign_stats.values,
+                    title="Top 10 Campanhas por Volume",
+                    labels={'x': 'Campanha', 'y': 'Registros'}
+                )
+                fig.update_xaxes(tickangle=45)
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.error(f"Erro ao criar gráfico: {str(e)[:100]}")
+        
+        st.subheader("💰 Métricas Financeiras")
+        
+        financial_metrics = []
+        col_numericas_filtradas = identificar_colunas_numericas(df_filtrado)
+        for metric in ['spend', 'revenue', 'conversions', 'roas', 'cpc']:
+            for col in col_numericas_filtradas:
+                if metric in col.lower():
+                    financial_metrics.append(col)
+                    break
+        
+        if financial_metrics:
+            cols = st.columns(min(4, len(financial_metrics)))
+            for idx, metric in enumerate(financial_metrics[:4]):
+                with cols[idx]:
+                    if metric in df_filtrado.columns:
+                        try:
+                            total = pd.to_numeric(df_filtrado[metric], errors='coerce').sum()
+                            safe_metric(metric, total)
+                        except:
+                            safe_metric(metric, "Erro")
+        
+        st.subheader("📊 Análise por Categoria")
+        
+        col_cat1, col_cat2 = st.columns(2)
+        
+        with col_cat1:
+            if 'campaign_cliente' in df_filtrado.columns:
+                try:
+                    cliente_stats = df_filtrado['campaign_cliente'].value_counts().head(10)
+                    
+                    fig_cliente = px.pie(
+                        values=cliente_stats.values,
+                        names=cliente_stats.index,
+                        title="Distribuição por Cliente",
+                        hole=0.3
+                    )
+                    st.plotly_chart(fig_cliente, use_container_width=True)
+                except:
+                    pass
+        
+        with col_cat2:
+            if 'campaign_tipo_campanha' in df_filtrado.columns:
+                try:
+                    tipo_stats = df_filtrado['campaign_tipo_campanha'].value_counts().head(10)
+                    
+                    fig_tipo = px.bar(
+                        x=tipo_stats.index,
+                        y=tipo_stats.values,
+                        title="Distribuição por Tipo de Campanha"
+                    )
+                    fig_tipo.update_xaxes(tickangle=45)
+                    st.plotly_chart(fig_tipo, use_container_width=True)
+                except:
+                    pass
+
+# =============================================================================
+# TAB 6: ANÁLISE COM IA
 # =============================================================================
 
 with tab6:
-    st.markdown('<div class="yoy-analysis"><h2>📊 Análise de Cenário YoY (Year-over-Year)</h2></div>', unsafe_allow_html=True)
+    st.header("🤖 Análise com Gemini IA")
     
-    st.markdown("""
-    ### 📝 Insira os dados para análise comparativa
+    if not modelo_texto:
+        st.error("❌ Gemini não configurado!")
+        st.stop()
     
-    Preencha os valores do **ano atual** e do **ano anterior** para cada métrica.
-    O sistema calculará automaticamente a variação YoY e gerará uma análise com Gemini.
-    """)
+    if df_filtrado.empty:
+        st.warning("📭 Nenhum dado carregado.")
+        st.stop()
     
-    # Input de dados
-    st.markdown('<div class="scenario-input">', unsafe_allow_html=True)
-    st.subheader("💰 Investimento (R$)")
+    st.markdown("### 🔍 Filtros para Análise")
     
-    col_inv1, col_inv2 = st.columns(2)
-    with col_inv1:
-        investimento_atual = st.number_input(
-            "Ano Atual:",
-            min_value=0.0,
-            value=100000.0,
-            step=1000.0,
-            format="%.2f",
-            key="investimento_atual"
-        )
+    with st.expander("⚙️ Configurar", expanded=True):
+        col_filter1, col_filter2 = st.columns(2)
+        
+        with col_filter1:
+            if 'datasource' in df_filtrado.columns:
+                datasources = sorted(df_filtrado['datasource'].dropna().unique())
+                selected_ds = st.multiselect(
+                    "Data Sources:",
+                    options=datasources,
+                    default=datasources[:min(3, len(datasources))],
+                    key="selected_ds_tab6"
+                )
+            else:
+                selected_ds = None
+            
+            if 'date' in df_filtrado.columns:
+                try:
+                    date_series = df_filtrado['date'].dropna()
+                    if len(date_series) > 0:
+                        if not pd.api.types.is_datetime64_any_dtype(date_series):
+                            date_series = pd.to_datetime(date_series, errors='coerce')
+                        
+                        min_date = date_series.min().date()
+                        max_date = date_series.max().date()
+                        
+                        date_range = st.date_input(
+                            "Período:",
+                            value=(min_date, max_date),
+                            min_value=min_date,
+                            max_value=max_date,
+                            key="date_range_tab6"
+                        )
+                    else:
+                        date_range = None
+                except Exception as e:
+                    date_range = None
+            else:
+                date_range = None
+        
+        with col_filter2:
+            if 'campaign' in df_filtrado.columns:
+                campaigns = sorted(df_filtrado['campaign'].dropna().unique())
+                selected_campaigns = st.multiselect(
+                    "Campanhas (opcional):",
+                    options=campaigns,
+                    key="selected_campaigns_tab6"
+                )
+            else:
+                selected_campaigns = None
+            
+            df_len = len(df_filtrado)
+            max_records_value = min(10000, max(100, df_len)) if df_len > 0 else 5000
+            max_records = st.slider(
+                "Máximo de registros:",
+                min_value=100,
+                max_value=min(10000, df_len) if df_len > 0 else 10000,
+                value=min(5000, max_records_value),
+                step=100,
+                key="max_records_tab6"
+            )
     
-    with col_inv2:
-        investimento_anterior = st.number_input(
-            "Ano Anterior:",
-            min_value=0.0,
-            value=85000.0,
-            step=1000.0,
-            format="%.2f",
-            key="investimento_anterior"
-        )
+    df_filtered_ia = df_filtrado.copy()
     
-    st.markdown("</div>", unsafe_allow_html=True)
+    if selected_ds and 'datasource' in df_filtered_ia.columns and len(selected_ds) > 0:
+        df_filtered_ia = df_filtered_ia[df_filtered_ia['datasource'].isin(selected_ds)]
     
-    st.markdown('<div class="scenario-input">', unsafe_allow_html=True)
-    st.subheader("👥 Sessões")
+    if date_range and len(date_range) == 2 and 'date' in df_filtered_ia.columns:
+        start_date, end_date = date_range
+        
+        if not pd.api.types.is_datetime64_any_dtype(df_filtered_ia['date']):
+            df_filtered_ia['date'] = pd.to_datetime(df_filtered_ia['date'], errors='coerce')
+        
+        mask = df_filtered_ia['date'].notna()
+        
+        start_dt = pd.Timestamp(start_date)
+        end_dt = pd.Timestamp(end_date)
+        
+        df_filtered_ia = df_filtered_ia[
+            mask & 
+            (df_filtered_ia['date'] >= start_dt) & 
+            (df_filtered_ia['date'] <= end_dt)
+        ]
     
-    col_ses1, col_ses2 = st.columns(2)
-    with col_ses1:
-        sessoes_atual = st.number_input(
-            "Ano Atual:",
-            min_value=0,
-            value=1000000,
-            step=10000,
-            key="sessoes_atual"
-        )
+    if selected_campaigns and 'campaign' in df_filtered_ia.columns and len(selected_campaigns) > 0:
+        df_filtered_ia = df_filtered_ia[df_filtered_ia['campaign'].isin(selected_campaigns)]
     
-    with col_ses2:
-        sessoes_anterior = st.number_input(
-            "Ano Anterior:",
-            min_value=0,
-            value=900000,
-            step=10000,
-            key="sessoes_anterior"
-        )
+    df_filtered_ia = df_filtered_ia.head(max_records)
     
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("### 📊 Dados Selecionados")
     
-    st.markdown('<div class="scenario-input">', unsafe_allow_html=True)
-    st.subheader("👍 Engajamento")
+    col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
     
-    col_eng1, col_eng2 = st.columns(2)
-    with col_eng1:
-        engajamento_atual = st.number_input(
-            "Ano Atual:",
-            min_value=0,
-            value=500000,
-            step=10000,
-            key="engajamento_atual"
-        )
+    with col_stat1:
+        safe_metric("Registros", len(df_filtered_ia))
     
-    with col_eng2:
-        engajamento_anterior = st.number_input(
-            "Ano Anterior:",
-            min_value=0,
-            value=450000,
-            step=10000,
-            key="engajamento_anterior"
-        )
+    with col_stat2:
+        if 'campaign' in df_filtered_ia.columns:
+            try:
+                num_campaigns = df_filtered_ia['campaign'].nunique()
+                safe_metric("Campanhas", num_campaigns)
+            except:
+                safe_metric("Campanhas", "Erro")
     
-    st.markdown("</div>", unsafe_allow_html=True)
+    with col_stat3:
+        if 'datasource' in df_filtered_ia.columns:
+            try:
+                num_sources = df_filtered_ia['datasource'].nunique()
+                safe_metric("Data Sources", num_sources)
+            except:
+                safe_metric("Data Sources", "Erro")
     
-    st.markdown('<div class="scenario-input">', unsafe_allow_html=True)
-    st.subheader("👁️ Views")
+    with col_stat4:
+        if 'date' in df_filtered_ia.columns:
+            try:
+                date_series = df_filtered_ia['date'].dropna()
+                if len(date_series) > 0:
+                    if not pd.api.types.is_datetime64_any_dtype(date_series):
+                        date_series = pd.to_datetime(date_series, errors='coerce')
+                    period_days = (date_series.max() - date_series.min()).days + 1
+                    safe_metric("Dias", period_days)
+                else:
+                    safe_metric("Dias", 0)
+            except:
+                safe_metric("Dias", "Erro")
     
-    col_views1, col_views2 = st.columns(2)
-    with col_views1:
-        views_atual = st.number_input(
-            "Ano Atual:",
-            min_value=0,
-            value=2000000,
-            step=10000,
-            key="views_atual"
-        )
+    st.markdown("### 🎯 Configuração")
     
-    with col_views2:
-        views_anterior = st.number_input(
-            "Ano Anterior:",
-            min_value=0,
-            value=1800000,
-            step=10000,
-            key="views_anterior"
-        )
-    
-    st.markdown("</div>", unsafe_allow_html=True)
-    
-    # Input de contexto adicional
-    st.markdown("### 📝 Contexto Adicional (Opcional)")
-    context_input = st.text_area(
-        "Forneça informações adicionais sobre o contexto, estratégias, mudanças no mercado, etc.:",
-        height=150,
-        placeholder="Ex: Aumentamos o investimento em vídeos, lançamos novo produto, mercado mais competitivo, mudança de estratégia...",
-        key="context_input"
+    analysis_focus = st.selectbox(
+        "Foco da Análise:",
+        options=["overall", "trends", "efficiency", "complete"],
+        format_func=lambda x: {
+            "overall": "📈 Performance Geral",
+            "trends": "📊 Tendências", 
+            "efficiency": "💰 Eficiência",
+            "complete": "🏆 Análise Completa"
+        }[x],
+        key="analysis_focus_tab6"
     )
     
-    # Calcular YoY
-    if st.button("📊 Calcular YoY e Gerar Análise", type="primary", use_container_width=True):
-        if not modelo_texto:
-            st.error("❌ Gemini não configurado. Configure a API key para usar esta funcionalidade.")
-        else:
-            with st.spinner("Calculando YoY e gerando análise..."):
-                # Calcular dados YoY
-                data_dict = analyze_scenario_data(
-                    investimento_atual, investimento_anterior,
-                    sessoes_atual, sessoes_anterior,
-                    engajamento_atual, engajamento_anterior,
-                    views_atual, views_anterior
-                )
-                
-                # Gerar análise com Gemini
-                analysis_result = analyze_yoy_data_with_gemini(data_dict, context_input)
-                st.session_state.yoy_analysis_result = analysis_result
-                
-                st.success("✅ Análise YoY gerada com sucesso!")
-                st.rerun()
+    user_instructions = st.text_area(
+        "📝 Instruções (opcional):",
+        placeholder="Ex: Foque no ROI, identifique as melhores campanhas, analise tendências por data source...",
+        height=100,
+        key="user_instructions_tab6"
+    )
     
-    # Mostrar resultados se disponíveis
-    if st.session_state.yoy_analysis_result:
+    st.markdown("### 🚀 Gerar Análise")
+    
+    generate_button = st.button("🤖 Gerar Análise com Gemini", type="primary", use_container_width=True, key="generate_button_tab6")
+    
+    if generate_button:
+        if df_filtered_ia.empty:
+            st.error("❌ Nenhum dado após filtros.")
+        else:
+            with st.spinner(f"🤖 Analisando {len(df_filtered_ia):,} registros..."):
+                try:
+                    analysis_result = generate_gemini_analysis(
+                        df_filtered_ia, 
+                        analysis_focus, 
+                        user_instructions
+                    )
+                    st.session_state.gemini_analysis = analysis_result
+                    st.success("✅ Análise concluída!")
+                except Exception as e:
+                    st.error(f"❌ Erro ao gerar análise: {str(e)[:200]}")
+    
+    if st.session_state.gemini_analysis:
         st.markdown("---")
-        st.markdown("### 📈 Resultados Calculados")
+        st.markdown("### 📄 Relatório de Análise")
         
-        # Calcular dados novamente para mostrar
-        data_dict = analyze_scenario_data(
-            investimento_atual, investimento_anterior,
-            sessoes_atual, sessoes_anterior,
-            engajamento_atual, engajamento_anterior,
-            views_atual, views_anterior
-        )
-        
-        # Mostrar métricas calculadas
-        col_res1, col_res2, col_res3, col_res4 = st.columns(4)
-        
-        with col_res1:
-            st.metric(
-                "💰 Investimento YoY",
-                format_currency(data_dict['investimento_atual']),
-                delta=f"{data_dict['investimento_yoy']:+.1f}%"
-            )
-        
-        with col_res2:
-            st.metric(
-                "👥 Sessões YoY",
-                f"{data_dict['sessoes_atual']:,.0f}",
-                delta=f"{data_dict['sessoes_yoy']:+.1f}%"
-            )
-        
-        with col_res3:
-            st.metric(
-                "👍 Engajamento YoY",
-                f"{data_dict['engajamento_atual']:,.0f}",
-                delta=f"{data_dict['engajamento_yoy']:+.1f}%"
-            )
-        
-        with col_res4:
-            st.metric(
-                "👁️ Views YoY",
-                f"{data_dict['views_atual']:,.0f}",
-                delta=f"{data_dict['views_yoy']:+.1f}%"
-            )
-        
-        # Métricas de eficiência
-        st.markdown("### 📊 Métricas de Eficiência")
-        
-        col_eff1, col_eff2, col_eff3 = st.columns(3)
-        
-        with col_eff1:
-            st.metric(
-                "💸 Custo por Sessão",
-                f"R$ {data_dict['cps_atual']:.2f}",
-                delta=f"{data_dict['cps_yoy']:+.1f}%",
-                delta_color="inverse" if data_dict['cps_yoy'] < 0 else "normal"
-            )
-        
-        with col_eff2:
-            st.metric(
-                "🎯 Engajamento/Investimento",
-                f"{data_dict['eficiencia_atual']:.2f}",
-                delta=f"{data_dict['eficiencia_yoy']:+.1f}%"
-            )
-        
-        with col_eff3:
-            st.metric(
-                "📈 Engajamento/View",
-                f"{data_dict['eng_view_atual']:.3f}",
-                delta=f"{data_dict['eng_view_yoy']:+.1f}%"
-            )
-        
-        # Gráfico de variação YoY
-        st.markdown("### 📊 Variação YoY por Métrica")
-        
-        yoy_data = pd.DataFrame({
-            'Métrica': ['Investimento', 'Sessões', 'Engajamento', 'Views'],
-            'Variação YoY (%)': [
-                data_dict['investimento_yoy'],
-                data_dict['sessoes_yoy'],
-                data_dict['engajamento_yoy'],
-                data_dict['views_yoy']
-            ]
-        })
-        
-        fig_yoy = px.bar(
-            yoy_data,
-            x='Métrica',
-            y='Variação YoY (%)',
-            title='Variação Year-over-Year por Métrica',
-            color='Variação YoY (%)',
-            color_continuous_scale='RdYlGn',
-            text_auto='+.1f'
-        )
-        fig_yoy.update_layout(height=400)
-        st.plotly_chart(fig_yoy, use_container_width=True)
-        
-        # Análise do Gemini
-        st.markdown("### 🤖 Análise com Gemini")
-        
-        col_actions1, col_actions2 = st.columns(2)
+        col_actions1, col_actions2, col_actions3 = st.columns(3)
         
         with col_actions1:
-            # Download da análise
-            analysis_text = st.session_state.yoy_analysis_result
+            analysis_text = st.session_state.gemini_analysis
             st.download_button(
-                label="💾 Baixar Análise",
+                label="💾 Baixar Relatório",
                 data=analysis_text,
-                file_name=f"analise_yoy_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                file_name=f"analise_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
                 mime="text/plain",
-                use_container_width=True
+                use_container_width=True,
+                key="download_report_tab6"
             )
         
         with col_actions2:
-            if st.button("🔄 Nova Análise", use_container_width=True):
-                st.session_state.yoy_analysis_result = None
-                st.rerun()
+            if st.button("🎬 Gerar Descrição dos Slides", use_container_width=True, type="secondary", key="generate_slides_tab6"):
+                with st.spinner("Gerando descrição para slides..."):
+                    slides_desc = generate_slides_description(
+                        st.session_state.gemini_analysis,
+                        user_instructions
+                    )
+                    
+                    st.session_state.slides_description = slides_desc
+                    st.success("✅ Descrição dos slides gerada!")
+                    st.rerun()
         
-        # Mostrar análise
+        with col_actions3:
+            if st.button("🔄 Nova Análise", use_container_width=True, key="new_analysis_tab6"):
+                st.session_state.gemini_analysis = None
+                st.session_state.slides_description = None
+                st.rerun()
+    
         st.markdown('<div class="gemini-response">', unsafe_allow_html=True)
-        st.markdown(st.session_state.yoy_analysis_result)
+        st.markdown(st.session_state.gemini_analysis)
         st.markdown('</div>', unsafe_allow_html=True)
+        
+        if st.session_state.slides_description:
+            st.markdown("---")
+            st.markdown("### 🎬 Descrição para Slides")
+            
+            slides_text = st.session_state.slides_description
+            st.download_button(
+                label="📥 Baixar Descrição dos Slides",
+                data=slides_text,
+                file_name=f"slides_descricao_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                mime="text/plain",
+                use_container_width=True,
+                key="download_slides_tab6"
+            )
+            
+            st.markdown('<div class="gemini-response">', unsafe_allow_html=True)
+            st.markdown(st.session_state.slides_description)
+            st.markdown('</div>', unsafe_allow_html=True)
 
 # =============================================================================
-# TAB 7: ANÁLISE DE TEXTO
+# TAB 7: CLASSIFICADOR DE CAMPANHAS MULTI-CLIENTES
 # =============================================================================
 
 with tab7:
-    st.markdown('<div class="text-analysis"><h2>📝 Análise de Dados em Texto</h2></div>', unsafe_allow_html=True)
+    st.markdown('<div class="campaign-classifier"><h2>🎪 Classificador de Campanhas Multi-Clientes</h2></div>', unsafe_allow_html=True)
     
-    st.markdown("""
-    ### 📋 Cole seus dados numéricos aqui
+    dicionario_categorias = carregar_dicionario_categorias()
     
-    **Formato aceito:**
-    - Tabelas copiadas de Excel, Google Sheets
-    - Dados em formato CSV
-    - Listas de números com descrições
-    - Relatórios com métricas
-    - Qualquer texto contendo dados numéricos
+    col_intro1, col_intro2 = st.columns(2)
     
-    **Exemplos:**
-    ```
-    Produto         Investimento   Cliques   Conversões
-    Victrato        15000          50000     1200
-    Vaniva          12000          45000     980
-    Reverb          8000           32000     750
+    with col_intro1:
+        st.markdown("### 📋 Sobre o Sistema")
     
-    ou
-    
-    Janeiro: R$ 50.000, 100.000 impressões, 5.000 cliques
-    Fevereiro: R$ 55.000, 120.000 impressões, 6.200 cliques
-    Março: R$ 60.000, 150.000 impressões, 7.500 cliques
-    ```
-    """)
-    
-    # Área de input de texto
-    st.markdown("### 📥 Cole seus dados aqui:")
-    text_data = st.text_area(
-        "",
-        height=300,
-        placeholder="Cole seus dados aqui...\n\nExemplo:\nProduto,Investimento,Cliques,Conversões\nVictrato,15000,50000,1200\nVaniva,12000,45000,980\nReverb,8000,32000,750",
-        key="text_data_input"
-    )
-    
-    # Opções de análise
-    st.markdown("### ⚙️ Configurações da Análise")
-    
-    col_opt1, col_opt2 = st.columns(2)
-    
-    with col_opt1:
-        analysis_type = st.selectbox(
-            "Tipo de análise:",
-            options=["complete", "financial", "performance", "insights"],
-            format_func=lambda x: {
-                "complete": "📊 Análise Completa",
-                "financial": "💰 Análise Financeira",
-                "performance": "📈 Análise de Performance",
-                "insights": "🔍 Extração de Insights"
-            }[x],
-            key="analysis_type_select"
-        )
-    
-    with col_opt2:
-        if st.button("🧹 Limpar Análise", use_container_width=True):
-            st.session_state.text_analysis_result = None
-            st.rerun()
-    
-    # Botão para análise
-    if st.button("🤖 Analisar Dados com Gemini", type="primary", use_container_width=True):
-        if not text_data or text_data.strip() == "":
-            st.error("❌ Por favor, cole alguns dados para análise.")
-        elif not modelo_texto:
-            st.error("❌ Gemini não configurado. Configure a API key para usar esta funcionalidade.")
+    with col_intro2:
+        st.markdown("### 🔍 Status da Classificação")
+        
+        if 'classificado' in df_classificado.columns:
+            total = len(df_classificado)
+            classificadas = df_classificado[df_classificado['classificado'] == 'SIM'].shape[0]
+            taxa = (classificadas / total * 100) if total > 0 else 0
+            
+            col_stat1, col_stat2 = st.columns(2)
+            with col_stat1:
+                safe_metric("Total", total)
+                safe_metric("Classificadas", classificadas)
+            with col_stat2:
+                safe_metric("Taxa", f"{taxa:.1f}%")
+                
+                if 'campaign_cliente' in df_classificado.columns:
+                    clientes_unicos = df_classificado['campaign_cliente'].nunique()
+                    safe_metric("Clientes", clientes_unicos)
         else:
-            with st.spinner("🤖 Gemini está analisando os dados..."):
-                analysis_result = analyze_text_data_with_gemini(text_data, analysis_type)
-                st.session_state.text_analysis_result = analysis_result
-                st.success("✅ Análise concluída!")
+            st.warning("Nenhuma classificação disponível")
+    
+    st.markdown("### 📊 Distribuição por Categoria")
+    
+    col_dist1, col_dist2, col_dist3 = st.columns(3)
+    
+    with col_dist1:
+        if 'campaign_cliente' in df_classificado.columns:
+            try:
+                cliente_counts = df_classificado['campaign_cliente'].value_counts().head(10)
+                
+                fig_clientes = px.bar(
+                    x=cliente_counts.index,
+                    y=cliente_counts.values,
+                    title="Top 10 Clientes",
+                    color=cliente_counts.values,
+                    color_continuous_scale='Viridis'
+                )
+                fig_clientes.update_xaxes(tickangle=45)
+                st.plotly_chart(fig_clientes, use_container_width=True)
+            except:
+                pass
+    
+    with col_dist2:
+        if 'campaign_tipo_campanha' in df_classificado.columns:
+            try:
+                tipo_counts = df_classificado['campaign_tipo_campanha'].value_counts().head(10)
+                
+                fig_tipos = px.pie(
+                    values=tipo_counts.values,
+                    names=tipo_counts.index,
+                    title="Tipos de Campanha",
+                    hole=0.3
+                )
+                st.plotly_chart(fig_tipos, use_container_width=True)
+            except:
+                pass
+    
+    with col_dist3:
+        if 'campaign_etapa_funil' in df_classificado.columns:
+            try:
+                etapa_counts = df_classificado['campaign_etapa_funil'].value_counts()
+                fig_etapas = px.bar(
+                    x=etapa_counts.index,
+                    y=etapa_counts.values,
+                    title="Etapas do Funil",
+                    color=etapa_counts.values,
+                    color_continuous_scale='Blues'
+                )
+                st.plotly_chart(fig_etapas, use_container_width=True)
+            except:
+                pass
+    
+    st.markdown("### 🔍 Explorador de Campanhas")
+    
+    col_explorer1, col_explorer2 = st.columns(2)
+    
+    with col_explorer1:
+        if 'campaign' in df_classificado.columns:
+            campanhas = sorted(df_classificado['campaign'].dropna().unique())
+            campanha_selecionada = st.selectbox(
+                "Selecione uma campanha para análise:",
+                options=campanhas[:100],
+                key="campanha_selecionada_tab7"
+            )
+            
+            if campanha_selecionada:
+                campanha_data = df_classificado[df_classificado['campaign'] == campanha_selecionada].iloc[0]
+                
+                st.markdown("#### 📋 Detalhes da Campanha")
+                st.write(f"**Nome:** {campanha_selecionada}")
+                
+                categorias_identificadas = {}
+                for col in df_classificado.columns:
+                    if col.startswith('campaign_') and col != 'campaign_classificado' and col != 'categorias_identificadas':
+                        valor = campanha_data[col]
+                        if pd.notna(valor):
+                            nome_categoria = col.replace('campaign_', '').replace('_', ' ').title()
+                            categorias_identificadas[nome_categoria] = valor
+                
+                if categorias_identificadas:
+                    st.markdown("#### 🏷️ Categorias Identificadas")
+                    for categoria, valor in categorias_identificadas.items():
+                        st.write(f"**{categoria}:** {valor}")
+                else:
+                    st.info("Nenhuma categoria identificada para esta campanha")
+    
+    with col_explorer2:
+        st.markdown("#### 📈 Estatísticas de Classificação")
+        
+        if 'classificado' in df_classificado.columns:
+            status_counts = df_classificado['classificado'].value_counts()
+            fig_status = px.pie(
+                values=status_counts.values,
+                names=status_counts.index,
+                title="Status de Classificação",
+                color=status_counts.values,
+                color_discrete_sequence=['#10b981', '#ef4444']
+            )
+            st.plotly_chart(fig_status, use_container_width=True)
+        
+        if st.button("🔄 Reclassificar Campanhas", use_container_width=True, key="reclassificar_tab7"):
+            with st.spinner("Reclassificando campanhas..."):
+                df_classificado_novo = classificar_campanhas_multi_cliente(df)
+                st.session_state.df_classificado = df_classificado_novo
+                st.success("✅ Campanhas reclassificadas!")
                 st.rerun()
     
-    # Mostrar resultados se disponíveis
-    if st.session_state.text_analysis_result:
-        st.markdown("---")
-        st.markdown("### 📄 Resultado da Análise")
+    st.markdown("### 📥 Exportar Dados Classificados")
+    
+    if len(df_classificado) > 0:
+        colunas_classificadas = [col for col in df_classificado.columns if col.startswith('campaign_')]
+        colunas_base = ['campaign', 'date', 'datasource'] if all(col in df_classificado.columns for col in ['campaign', 'date', 'datasource']) else []
+        colunas_exportar = colunas_base + colunas_classificadas
         
-        col_act1, col_act2 = st.columns(2)
+        col_export1, col_export2 = st.columns(2)
         
-        with col_act1:
-            # Download da análise
-            analysis_text = st.session_state.text_analysis_result
+        with col_export1:
+            csv_data = df_classificado[colunas_exportar].to_csv(index=False)
             st.download_button(
-                label="📥 Baixar Análise",
-                data=analysis_text,
-                file_name=f"analise_texto_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-                mime="text/plain",
-                use_container_width=True
+                label="📥 Baixar Todos os Dados Classificados",
+                data=csv_data,
+                file_name=f"campanhas_classificadas_completo_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                mime="text/csv",
+                use_container_width=True,
+                key="download_all_tab7"
             )
         
-        with col_act2:
-            # Nova análise
-            if st.button("🔄 Analisar Novos Dados", use_container_width=True):
-                st.session_state.text_analysis_result = None
-                st.rerun()
-        
-        # Mostrar análise
-        st.markdown('<div class="gemini-response">', unsafe_allow_html=True)
-        st.markdown(st.session_state.text_analysis_result)
-        st.markdown('</div>', unsafe_allow_html=True)
+        with col_export2:
+            if 'classificado' in df_classificado.columns:
+                nao_classificadas = df_classificado[df_classificado['classificado'] == 'NÃO']
+                if len(nao_classificadas) > 0:
+                    csv_nao_classificadas = nao_classificadas[['campaign']].to_csv(index=False)
+                    st.download_button(
+                        label="📥 Baixar Campanhas Não Classificadas",
+                        data=csv_nao_classificadas,
+                        file_name=f"campanhas_nao_classificadas_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                        key="download_unclassified_tab7"
+                    )
     
-    # Exemplos de dados
-    with st.expander("📚 Exemplos de Dados para Teste"):
-        st.markdown("""
-        ### Exemplo 1: Dados de Produtos
+    if modelo_texto and len(df_classificado) > 0:
+        st.markdown("### 🤖 Análise de Padrões com Gemini")
         
-        ```
-        Produto         Investimento   Impressões   Cliques   CTR      Conversões
-        Victrato        15.000         500.000      25.000    5.0%     1.200
-        Vaniva          12.000         450.000      22.500    5.0%     980
-        Reverb          8.000          320.000      16.000    5.0%     750
-        Joiner          10.000         400.000      18.000    4.5%     850
-        Certano         6.000          250.000      10.000    4.0%     520
-        ```
-        
-        ### Exemplo 2: Dados Mensais
-        
-        ```
-        Mês       Investimento   Sessões   Engajamento   Views
-        Janeiro   50.000         100.000   25.000        200.000
-        Fevereiro 55.000         120.000   30.000        240.000
-        Março     60.000         150.000   38.000        300.000
-        Abril     65.000         180.000   45.000        360.000
-        Maio      70.000         200.000   52.000        400.000
-        ```
-        
-        ### Exemplo 3: Dados por Plataforma
-        
-        ```
-        Plataforma   Investimento   CPC      CTR      Conversões   ROAS
-        Facebook     40.000         R$ 0.80  3.2%     800          2.5x
-        Instagram    30.000         R$ 1.20  2.8%     600          2.0x
-        Google Ads   20.000         R$ 1.50  4.5%     450          1.8x
-        TikTok       15.000         R$ 0.60  5.2%     350          2.3x
-        LinkedIn     5.000          R$ 2.00  1.8%     100          1.5x
-        ```
-        
-        ### Exemplo 4: Dados de Campanhas
-        
-        ```
-        Campanha                   Tipo          Investimento   Resultados   CPL
-        Victrato Soja             Video         8.000          120          R$ 66.67
-        Vaniva Milho              Display       6.000          85           R$ 70.59
-        Reverb Soja               Search        5.000          95           R$ 52.63
-        Joiner Algodão            Social        4.000          70           R$ 57.14
-        Certano Café              Performance   3.000          55           R$ 54.55
-        ```
-        
-        **Dica:** Cole qualquer um desses exemplos na caixa de texto acima e clique em "Analisar Dados com Gemini"!
-        """)
+        if st.button("🔍 Analisar Padrões de Nomenclatura", use_container_width=True, key="analisar_padroes_tab7"):
+            with st.spinner("Analisando padrões de nomenclatura..."):
+                try:
+                    sample_size = min(50, len(df_classificado))
+                    sample_campaigns = df_classificado['campaign'].dropna().sample(sample_size).tolist()
+                    
+                    clientes_identificados = []
+                    if 'campaign_cliente' in df_classificado.columns:
+                        clientes_identificados = df_classificado['campaign_cliente'].dropna().unique().tolist()
+                    
+                    prompt = f"""
+                    Analise os seguintes nomes de campanhas de marketing e identifique:
+                    
+                    1. Padrões comuns de nomenclatura
+                    2. Estruturas mais frequentes
+                    3. Componentes principais encontrados
+                    4. Clientes identificados: {', '.join(clientes_identificados[:10]) if clientes_identificados else 'Nenhum'}
+                    5. Problemas de padronização
+                    6. Sugestões para melhorar a classificação automática
+                    
+                    Amostra de nomes de campanhas:
+                    {', '.join([str(c) for c in sample_campaigns])}
+                    
+                    Forneça uma análise detalhada em português com:
+                    - Identificação de padrões estruturais
+                    - Componentes mais comuns (cliente, produto, objetivo, etc.)
+                    - Problemas de inconsistência
+                    - Recomendações para padronização futura
+                    - Sugestões para melhorar a taxonomia
+                    """
+                    
+                    response = modelo_texto.generate_content(prompt)
+                    
+                    st.markdown("### 📄 Análise de Padrões")
+                    st.markdown('<div class="gemini-response">', unsafe_allow_html=True)
+                    st.markdown(response.text)
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    
+                except Exception as e:
+                    st.error(f"Erro na análise: {str(e)[:200]}")
 
 # =============================================================================
 # RODAPÉ
@@ -1756,16 +2459,19 @@ st.markdown("---")
 footer_col1, footer_col2, footer_col3 = st.columns(3)
 
 with footer_col1:
-    if not df.empty:
-        st.caption(f"📊 Dados: {len(df):,} registros")
-    else:
-        st.caption("📊 Aguardando dados...")
+    if not df_filtrado.empty:
+        st.caption(f"📊 Dados: {len(df_filtrado):,} registros")
+        if st.session_state.filtros_aplicados:
+            filtros_count = len(st.session_state.filtros_aplicados)
+            st.caption(f"🔍 Filtros: {filtros_count} ativos")
 
 with footer_col2:
-    if st.session_state.yoy_analysis_result:
-        st.caption("📈 Análise YoY disponível")
-    elif st.session_state.text_analysis_result:
-        st.caption("📝 Análise de texto disponível")
+    if 'campaign' in df_filtrado.columns:
+        try:
+            num_campaigns = df_filtrado['campaign'].nunique()
+            st.caption(f"🎯 Campanhas: {num_campaigns}")
+        except:
+            st.caption("🎯 Campanhas: Erro")
 
 with footer_col3:
     st.caption(f"⏰ {datetime.now().strftime('%d/%m/%Y %H:%M')}")
@@ -1774,4 +2480,4 @@ with footer_col3:
 if modelo_texto:
     st.sidebar.success("✅ Gemini ativo")
 else:
-    st.sidebar.info("ℹ️ Gemini inativo - Algumas funcionalidades limitadas")
+    st.sidebar.info("ℹ️ Gemini inativo")
