@@ -1769,10 +1769,10 @@ else:
     st.info("ℹ️ Nenhum filtro aplicado. Todos os dados estão visíveis.")
 
 # Abas principais
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
+tab1,   tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
     "📋 Visão Geral", 
-    "📈 Análise Numérica", 
-    "🔍 Explorar Colunas", 
+   
+   
     "📊 Visualizar Dados",
     "🎯 Performance",
     "🤖 Análise com IA",
