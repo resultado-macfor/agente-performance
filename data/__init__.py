@@ -1,0 +1,9 @@
+# Redirecionado para config.constants
+from config.constants import (
+    LISTA_PRODUTOS,
+    OPCOES_CLIENTES,
+    DATA_SOURCES_OPCOES,
+    PADROES_CLASSIFICACAO,
+    CLIENTES_PADROES,
+    DICIONARIO_CATEGORIAS,
+)

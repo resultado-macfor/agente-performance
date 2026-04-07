@@ -1,0 +1,119 @@
+LISTA_PRODUTOS = [
+    'ACTARA', 'ALADE-MITRION', 'AMISTAR', 'AMISTAR_TOP', 'AMPLIGO', 'ARVATICO',
+    'AVICTA_COMPLETO', 'AXIAL', 'BRAVONIL', 'BRAVONIL_TOP', 'BRAVONIL720', 'CALARIS',
+    'CALARIS_MA', 'CALIPEN_SC', 'CLARIVA_SKY', 'CRUISER_ADVANCED', 'CRUISER_OPTI',
+    'CRUISER_TURBO', 'CURYOM', 'CYPRESS', 'DUAL_GOLD', 'DURIVO', 'EDDUS', 'ELATUS',
+    'ELESTAL_NEO', 'ENGEO_PLENO_S', 'FORTENZA', 'FORTENZA_DUO', 'FORTENZA_ELITE',
+    'FORTENZA_VIP_TURBO', 'GROVER', 'INFLUX', 'INSTIVO', 'INVICT', 'JOINER',
+    'MAXIM_QUATTRO', 'MINECTO_PRO', 'MIRAVIS', 'MIRAVIS_DUO', 'MIRAVIS_PRO', 'MODDUS',
+    'NEMATOIDES', 'PERGADO_MZ', 'PLINAZOLIN', 'POLYTRIN', 'PRIORI_TOP', 'PRIORI_XTRA',
+    'PROCLAIM', 'REBRON', 'REGLONE', 'REVUS_OPTI', 'RIDOMIL_GOLD', 'SCORE_FLEXI',
+    'SPONTA', 'VERDADERO', 'VERDAVIS', 'VOLIAM_FLEXI', 'VOLIAM_TARGO', 'CERTANO',
+    'RIZOLIQ_LLI', 'RIZOLIQ_UHC', 'ALADE', 'MITRION', 'POLO_500_SC', 'ADEPIDYN',
+    'ORONDIS_FLEXI', 'SCORE', 'ORONDIS_ULTRA', 'INZAK_ZEON', 'REVERB', 'MEGAFOL',
+    'AEVO', 'YIELDON', 'FRONDEO', 'FLEXSTAR_GT', 'ELESTAL', 'FANTON', 'JOINER_PRO',
+    'INVENCIS', 'SEEKER', 'CRESTIVO', 'VIVA', 'RIZODERMA', 'RIZOFOS', 'SIGNUM',
+    'NETURE', 'MIRAVIS_XTRA', 'VANIVA', 'CRUISER_OPTI-CRUISER_ADVANCED',
+    'VICTRATO_GOLD', 'BOUNDARY_EC', 'VICTRATO',
+]
+
+OPCOES_CLIENTES = [
+    "Todos",
+    "Syngenta",
+    "Golden Harvest Brasil",
+    "Nidera (oficial)",
+    "NK Seeds (Oficial - Lab)",
+    "EuroChem Fertilizantes Tocantins",
+    "Grupo Vittia",
+]
+
+DATA_SOURCES_OPCOES = ["facebook", "google ads", "tiktok", "linkedin", "twitter", "pinterest"]
+
+PADROES_CLASSIFICACAO = {
+    'etapa_funil': [
+        'UP', 'MID', 'LOWER', 'TOF', 'MOF', 'BOF', 'TOP', 'MIDDLE', 'BOTTOM',
+        'AWARENESS', 'CONSIDERATION', 'CONVERSION', 'RETENTION',
+        'DESCOBERTA', 'CONSIDERACAO', 'CONVERSAO', 'RETENCAO',
+    ],
+    'tipo_campanha': [
+        'VIDEO', 'DISPLAY', 'SEARCH', 'SOCIAL', 'EMAIL', 'SMS', 'PUSH',
+        'NATIVO', 'NATIVE', 'PROGRAMATICA', 'PROGRAMMATIC',
+        'PERFORMANCE', 'BRANDING', 'BRAND', 'DIRECT', 'DIRECT_RESPONSE',
+    ],
+    'objetivo': [
+        'AWARENESS', 'CONSIDERATION', 'CONVERSION', 'LEAD', 'SALES',
+        'TRAFFIC', 'ENGAGEMENT', 'INSTALL', 'VIEWS', 'CLICKS',
+        'ALCANCE', 'CONVERSAO', 'LEADS', 'VENDAS', 'TRAFEGO',
+        'ENGAJAMENTO', 'INSTALACOES', 'VISUALIZACOES', 'CLIQUES',
+    ],
+    'plataforma': [
+        'GOOGLE', 'FACEBOOK', 'INSTAGRAM', 'TIKTOK', 'LINKEDIN', 'TWITTER',
+        'YOUTUBE', 'PINTEREST', 'SNAPCHAT', 'META', 'BING',
+        'DV360', 'TRADEDESK', 'AMAZON', 'APPLE', 'SPOTIFY',
+    ],
+    'agencia': [
+        'MACFOR', 'OGILVY', 'PUBLICIS', 'WPP', 'OMNICOM', 'DENTSU',
+        'HAVAS', 'IPG', 'ACCENTURE', 'DELOITTE', 'PWC', 'KPMG',
+    ],
+    'cultura': [
+        'SOJA', 'MILHO', 'CAFE', 'ALGODAO', 'CANADEACUCAR', 'CANA',
+        'TRIGO', 'ARROZ', 'FEIJAO', 'MANDIOCA', 'LARANJA', 'UVA',
+        'TOMATE', 'BATATA', 'CEVADA', 'AVEIA', 'GIRASSOL',
+    ],
+    'produto': LISTA_PRODUTOS,
+}
+
+CLIENTES_PADROES = {
+    'SYNGENTA': ['SYNGENTA', 'CROP', 'AGRO'],
+    'BAYER': ['BAYER', 'CROPSCIENCE'],
+    'BASF': ['BASF'],
+    'CORTEVA': ['CORTEVA', 'PIONEER'],
+    'NOVARTIS': ['NOVARTIS'],
+    'MONSANTO': ['MONSANTO'],
+    'JOHNSON': ['JOHNSON', 'JNJ'],
+    'PFIZER': ['PFIZER'],
+    'ROCHE': ['ROCHE'],
+    'MERCK': ['MERCK'],
+    'GLAXOSMITHKLINE': ['GSK', 'GLAXO'],
+    'ASTRAZENECA': ['ASTRAZENECA'],
+    'SANOFI': ['SANOFI'],
+}
+
+DICIONARIO_CATEGORIAS = {
+    'iniciativa': [
+        'LANCAMENTO', 'RELANCAMENTO', 'PROMOCAO', 'SAZONAL',
+        'EVENTO', 'FEIRA', 'CONGRESSO', 'WORKSHOP',
+        'DIA_ESPECIAL', 'NATAL', 'PASCOA', 'BLACKFRIDAY',
+        'CYBERMONDAY', 'VERAO', 'INVERNO', 'OUTONO', 'PRIMAVERA',
+    ],
+    'produto': [
+        'PRODUTO_A', 'PRODUTO_B', 'PRODUTO_C', 'PRODUTO_D',
+        'LINHA_X', 'LINHA_Y', 'LINHA_Z', 'FAMILIA_A', 'FAMILIA_B',
+    ],
+    'cultura': [
+        'SOJA', 'MILHO', 'CAFE', 'ALGODAO', 'CANA',
+        'TRIGO', 'ARROZ', 'FEIJAO', 'FRUTAS', 'HORTALICAS',
+        'GRÃOS', 'CEREAIS', 'OLEAGINOSAS',
+    ],
+    'categoria': [
+        'INSETICIDA', 'FUNGICIDA', 'HERBICIDA', 'ADUBO',
+        'FERTILIZANTE', 'SEMENTE', 'BIOLOGICO', 'QUIMICO',
+        'ORGANICO', 'CONVENCIONAL',
+    ],
+    'tipo_campanha': [
+        'VIDEO', 'DISPLAY', 'SEARCH', 'SOCIAL', 'EMAIL',
+        'PERFORMANCE', 'BRANDING', 'DIRECT_RESPONSE',
+        'NATIVE', 'PROGRAMMATIC', 'AUDIO', 'TV', 'RADIO',
+    ],
+    'objetivo': [
+        'AWARENESS', 'CONSIDERATION', 'CONVERSION',
+        'LEAD_GENERATION', 'SALES', 'TRAFFIC', 'ENGAGEMENT',
+        'BRAND_LIFT', 'INSTALLS', 'VIEWS',
+    ],
+    'etapa_funil': ['TOF', 'MOF', 'BOF', 'UP', 'MID', 'LOWER'],
+    'plataforma': [
+        'GOOGLE_ADS', 'FACEBOOK', 'INSTAGRAM', 'TIKTOK',
+        'LINKEDIN', 'YOUTUBE', 'TWITTER', 'PINTEREST',
+        'DV360', 'TRADEDESK', 'AMAZON_DSP',
+    ],
+}
